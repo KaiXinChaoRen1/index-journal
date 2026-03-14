@@ -85,9 +85,9 @@ export type MarketCard = {
   headlineSourceLabel: string;
 };
 
-function formatUsEasternMidnight(tradingDate: Date) {
+function formatUsEasternTradingDate(tradingDate: Date) {
   const date = tradingDate.toISOString().slice(0, 10);
-  return `${date} 00:00:00 ET`;
+  return `${date} ET 交易日`;
 }
 
 function computeAnnualizedReturnPct(
@@ -196,7 +196,7 @@ function buildMarketCard(
     athClose: athRow ? round(athRow.close) : null,
     athDate: athRow ? athRow.date : null,
     headlineMode: "formal_eod",
-    headlineTime: formatUsEasternMidnight(latest.date),
+    headlineTime: formatUsEasternTradingDate(latest.date),
     headlineSourceLabel: "Twelve Data Time Series (1day)",
   };
 }

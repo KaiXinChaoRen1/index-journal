@@ -159,6 +159,8 @@ npm run dev
   面向日常开发流程、同步、排错和验证。
 - `docs/data-sources.md`
   面向数据源选择和后续切换空间。
+- `docs/code-review.md`
+  面向阶段性代码审查与收尾记录。
 
 ## 未来方向
 
