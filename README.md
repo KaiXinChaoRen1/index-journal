@@ -145,6 +145,14 @@ npm run dev
 - `GET /api/forex/chart?symbol=USD/CNY&range=1Y`
 - `GET /api/btc`
 - `GET /api/btc/chart?symbol=BTC/USD&range=1Y`
+- `GET /api/manual-snapshot/[group]`
+- `POST /api/manual-snapshot/[group]`
+
+手动刷新策略：
+
+- 仅用户手动触发，不做自动高频轮询
+- 按页面数据组做 5 分钟节流（`market` / `forex` / `btc`）
+- BTC 支持 7x24；指数与汇率仅纽约常规交易时段允许刷新
 
 图表范围固定为：
 
