@@ -511,6 +511,50 @@ a {
   border-radius: 28px;
 }
 
+.refresh-panel {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(255, 250, 242, 0.7);
+  border: 1px solid rgba(58, 46, 32, 0.1);
+}
+
+.refresh-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.refresh-button {
+  padding: 8px 14px;
+  border: 1px solid rgba(58, 46, 32, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.9);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.refresh-button.pending {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.refresh-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.refresh-meta,
+.refresh-status,
+.refresh-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .log-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

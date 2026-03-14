@@ -1,6 +1,8 @@
 import { MarketChart } from "@/app/components/market-chart";
+import { ManualRefreshControl } from "@/app/components/manual-refresh-control";
 import { SiteMenu } from "@/app/components/site-menu";
 import { formatIndexValue } from "@/lib/market-shared";
+import { getSnapshotGroupState, getSnapshotRefreshAvailability } from "@/lib/manual-snapshot";
 import {
   formatDate,
   formatPercentOrFallback,
@@ -43,7 +45,13 @@ function MetricRow({
 }
 
 export default async function BtcPage() {
-  const [card, defaultChart] = await Promise.all([getBtcCard(), getDefaultBtcChart()]);
+  const [card, defaultChart, snapshotState] = await Promise.all([
+    getBtcCard(),
+    getDefaultBtcChart(),
+    getSnapshotGroupState("btc"),
+  ]);
+  const availability = getSnapshotRefreshAvailability("btc");
+  const snapshot = snapshotState.payload["BTC/USD"];
 
   return (
     <main className="page-shell">
@@ -62,6 +70,15 @@ export default async function BtcPage() {
         </div>
       </section>
 
+      <ManualRefreshControl
+        group="btc"
+        title="手动快照刷新（BTC/USD）"
+        initialLastSuccessAt={snapshotState.lastSuccessAt ? snapshotState.lastSuccessAt.toISOString() : null}
+        initialLastErrorMessage={snapshotState.lastErrorMessage}
+        initialCanRefresh={availability.canRefresh}
+        initialAvailabilityReason={availability.reason}
+      />
+
       {!card ? (
         <section className="empty-state">
           <h2>暂无 BTC 数据</h2>
@@ -78,8 +95,12 @@ export default async function BtcPage() {
                 <p className="hero-copy card-copy">{card.description}</p>
               </div>
               <div className="headline-metric">
-                <p>{formatIndexValue(card.currentPrice)}</p>
-                <span>官方数据时间 · {formatDate(card.latestDate)} UTC 交易日</span>
+                <p>{formatIndexValue(snapshot ? snapshot.price : card.currentPrice)}</p>
+                <span>
+                  {snapshot
+                    ? `手动快照时间 · ${snapshot.sourceTimestamp} UTC`
+                    : `官方数据时间 · ${formatDate(card.latestDate)} UTC 交易日`}
+                </span>
               </div>
             </div>
 
@@ -118,7 +139,11 @@ export default async function BtcPage() {
 
             <div className="card-footer">
               <span>数据日期 {formatDate(card.latestDate)}</span>
-              <span>头部价格来源 Twelve Data Time Series (1day)</span>
+              <span>头部价格来源 {snapshot ? snapshot.sourceLabel : "Twelve Data Time Series (1day)"}</span>
+              <span>{snapshot ? "当前价格口径 手动快照" : "当前价格口径 官方EOD"}</span>
+              <span>
+                当前价格时间 {snapshot ? `${snapshot.sourceTimestamp} UTC` : `${formatDate(card.latestDate)} UTC 交易日`}
+              </span>
               <span>方向口径 BTC/USD</span>
             </div>
           </article>

@@ -101,6 +101,22 @@ npm run db:push
 2. Twelve Data 当前账号是否拿到了足够早的历史
 3. 数据库里该 symbol 的最早日期是否早于目标日期
 
+### 如果“刷新最新数据”按钮不可用或返回冷却
+
+先检查：
+
+1. 当前页面组是否允许刷新（BTC 7x24；指数/汇率仅纽约常规交易时段）
+2. 最近一次成功刷新是否在 5 分钟内（冷却期内会直接复用快照）
+3. `ManualSnapshotState` 是否已有该页面组的最近成功记录
+
+### 如果手动刷新失败但页面没崩
+
+这是预期的降级行为，先检查：
+
+1. Twelve Data 是否返回了额度限制
+2. `.env` 中 `TWELVE_DATA_API_KEY` 是否缺失或无效
+3. API `/api/manual-snapshot/[group]` 返回的 `message` 与 `lastErrorMessage`
+
 ## 7. 推荐工作流
 
 1. 先读 `AGENTS.md`
