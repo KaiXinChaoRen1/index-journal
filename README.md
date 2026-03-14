@@ -29,6 +29,7 @@ Index Journal 是一个围绕指数投资、市场观察、AI 协作开发与个
 5. 提供 `/api/market` 和 `/api/market/chart`
 6. 提供“开发日志”页面，记录产品取舍和项目定位
 7. 提供“昨夜收盘快照 + 官方EOD”双轨展示口径（仅首页头部价格）
+8. 提供汇率观察页与 BTC 观察页，统一复用本地日线计算与走势图组件
 
 当前明确不做：
 
@@ -133,11 +134,17 @@ npm run dev
 
 - `/`：首页市场面板
 - `/log`：开发日志 / 产品日志
+- `/forex`：汇率观察
+- `/btc`：BTC 观察
 
 当前接口：
 
 - `GET /api/market`
 - `GET /api/market/chart?symbol=SPY&range=1Y`
+- `GET /api/forex`
+- `GET /api/forex/chart?symbol=USD/CNY&range=1Y`
+- `GET /api/btc`
+- `GET /api/btc/chart?symbol=BTC/USD&range=1Y`
 
 图表范围固定为：
 

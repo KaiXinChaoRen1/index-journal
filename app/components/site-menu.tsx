@@ -22,6 +22,11 @@ const MENU_ITEMS = [
     label: "汇率观察",
     description: "补充观察美元相关汇率与区间变化。",
   },
+  {
+    href: "/btc",
+    label: "BTC 观察",
+    description: "补充观察 BTC/USD 的位置与区间变化。",
+  },
 ] as const;
 
 export function SiteMenu() {

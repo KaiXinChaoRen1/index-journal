@@ -18,6 +18,7 @@ const MARKET_DEFINITIONS = [
   { marketKey: "USDJPY", symbol: "USD/JPY", title: "USD/JPY", historyStart: new Date("2000-01-01T00:00:00Z") },
   { marketKey: "USDINR", symbol: "USD/INR", title: "USD/INR", historyStart: new Date("2000-01-01T00:00:00Z") },
   { marketKey: "USDEUR", symbol: "USD/EUR", title: "USD/EUR", historyStart: new Date("2000-01-01T00:00:00Z") },
+  { marketKey: "BTCUSD", symbol: "BTC/USD", title: "BTC/USD", historyStart: new Date("2010-01-01T00:00:00Z") },
 ];
 
 function requireApiKey() {
