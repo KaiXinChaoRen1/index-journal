@@ -1,0 +1,30 @@
+{
+  "name": "index-journal",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0 --port 3000",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0 --port 3000",
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "sync:data": "node scripts/sync-index-data.mjs",
+    "setup:data": "npm run db:generate && npm run db:push && npm run sync:data"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.3",
+    "next": "^16.1.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "eslint": "^9.36.0",
+    "eslint-config-next": "^16.1.6",
+    "prisma": "^6.16.3",
+    "typescript": "^5.9.3"
+  }
+}

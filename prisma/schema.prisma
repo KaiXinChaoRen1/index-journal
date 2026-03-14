@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model DailyPrice {
+  id        Int      @id @default(autoincrement())
+  // 这里保存的是 ETF 代码，例如 SPY / QQQ。
+  symbol    String
+  // 交易日日期，代表该日线属于哪一个市场交易日。
+  date      DateTime
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 同一个 ETF 在同一个交易日只允许存在一条记录。
+  @@unique([symbol, date])
+  @@index([symbol, date])
+}
