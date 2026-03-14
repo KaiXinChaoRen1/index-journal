@@ -8,10 +8,16 @@ const CHUNK_YEARS = 10;
 const RECENT_REFRESH_DAYS = 14;
 const RATE_LIMIT_WAIT_MS = 65_000;
 const MAX_RATE_LIMIT_RETRIES = 3;
+const BEIJING_OFFSET_HOURS = 8;
+const FORMAL_EOD_JOB = "FORMAL_EOD";
 
 const MARKET_DEFINITIONS = [
-  { marketKey: "SP500", symbol: "SPY", title: "S&P 500" },
-  { marketKey: "NASDAQ100", symbol: "QQQ", title: "Nasdaq 100" },
+  { marketKey: "SP500", symbol: "SPY", title: "S&P 500", historyStart: FULL_HISTORY_START },
+  { marketKey: "NASDAQ100", symbol: "QQQ", title: "Nasdaq 100", historyStart: FULL_HISTORY_START },
+  { marketKey: "USDCNY", symbol: "USD/CNY", title: "USD/CNY", historyStart: new Date("2000-01-01T00:00:00Z") },
+  { marketKey: "USDJPY", symbol: "USD/JPY", title: "USD/JPY", historyStart: new Date("2000-01-01T00:00:00Z") },
+  { marketKey: "USDINR", symbol: "USD/INR", title: "USD/INR", historyStart: new Date("2000-01-01T00:00:00Z") },
+  { marketKey: "USDEUR", symbol: "USD/EUR", title: "USD/EUR", historyStart: new Date("2000-01-01T00:00:00Z") },
 ];
 
 function requireApiKey() {
@@ -65,6 +71,46 @@ function shiftDays(date, days) {
   return result;
 }
 
+function getBeijingDayStartUtc(input) {
+  const shifted = new Date(input.getTime() + BEIJING_OFFSET_HOURS * 60 * 60 * 1000);
+  const utcMidnight = Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+
+  return new Date(utcMidnight - BEIJING_OFFSET_HOURS * 60 * 60 * 1000);
+}
+
+async function markFormalEodCheckpoint(isSuccess, message = null) {
+  const bizDate = getBeijingDayStartUtc(new Date());
+
+  await prisma.syncCheckpoint.upsert({
+    where: {
+      jobType_bizDate: {
+        jobType: FORMAL_EOD_JOB,
+        bizDate,
+      },
+    },
+    update: {
+      isSuccess,
+      message,
+      completedAt: new Date(),
+    },
+    create: {
+      jobType: FORMAL_EOD_JOB,
+      bizDate,
+      isSuccess,
+      message,
+      completedAt: new Date(),
+    },
+  });
+}
+
 async function fetchSeriesRange(symbol, apiKey, startDate, endDate) {
   for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt += 1) {
     const response = await fetch(buildUrlWithRange(symbol, apiKey, startDate, endDate), {
@@ -112,7 +158,9 @@ async function fetchSeriesRange(symbol, apiKey, startDate, endDate) {
         high: Number.parseFloat(row.high),
         low: Number.parseFloat(row.low),
         close: Number.parseFloat(row.close),
-        volume: Number.parseInt(row.volume, 10),
+        volume: Number.isInteger(Number.parseInt(row.volume, 10))
+          ? Number.parseInt(row.volume, 10)
+          : 0,
       }))
       .filter(
         (row) =>
@@ -195,58 +243,67 @@ async function upsertBars(symbol, rows) {
 async function main() {
   const apiKey = requireApiKey();
   const today = new Date();
-  const targetHistoryStart = FULL_HISTORY_START;
+  try {
+    for (const market of MARKET_DEFINITIONS) {
+      const targetHistoryStart = market.historyStart ?? FULL_HISTORY_START;
+      const { earliestDate, latestDate } = await getHistoryBounds(market.symbol);
+      const windows = [];
 
-  for (const market of MARKET_DEFINITIONS) {
-    const { earliestDate, latestDate } = await getHistoryBounds(market.symbol);
-    const windows = [];
-
-    if (!earliestDate || !latestDate || earliestDate.getTime() > targetHistoryStart.getTime()) {
-      windows.push({
-        startDate: targetHistoryStart,
-        endDate: today,
-        label: "history-sync",
-      });
-    } else {
-      windows.push({
-        startDate: shiftDays(latestDate, -RECENT_REFRESH_DAYS),
-        endDate: today,
-        label: "incremental-refresh",
-      });
-    }
-
-    let totalRowsFetched = 0;
-
-    for (const window of windows) {
-      if (window.startDate.getTime() > window.endDate.getTime()) {
-        continue;
+      if (!earliestDate || !latestDate || earliestDate.getTime() > targetHistoryStart.getTime()) {
+        windows.push({
+          startDate: targetHistoryStart,
+          endDate: today,
+          label: "history-sync",
+        });
+      } else {
+        windows.push({
+          startDate: shiftDays(latestDate, -RECENT_REFRESH_DAYS),
+          endDate: today,
+          label: "incremental-refresh",
+        });
       }
 
-      const rows = await fetchHistoricalWindow(
-        market.symbol,
-        apiKey,
-        window.startDate,
-        window.endDate,
-      );
-      await upsertBars(market.symbol, rows);
-      totalRowsFetched += rows.length;
+      let totalRowsFetched = 0;
+
+      for (const window of windows) {
+        if (window.startDate.getTime() > window.endDate.getTime()) {
+          continue;
+        }
+
+        const rows = await fetchHistoricalWindow(
+          market.symbol,
+          apiKey,
+          window.startDate,
+          window.endDate,
+        );
+        await upsertBars(market.symbol, rows);
+        totalRowsFetched += rows.length;
+        console.log(
+          `Fetched ${market.symbol} ${window.label}: ${rows.length} rows (${formatIsoDate(window.startDate)} -> ${formatIsoDate(window.endDate)})`,
+        );
+      }
+
+      const latest = await prisma.dailyPrice.findFirst({
+        where: { symbol: market.symbol },
+        orderBy: { date: "desc" },
+        select: { date: true },
+      });
+      const count = await prisma.dailyPrice.count({
+        where: { symbol: market.symbol },
+      });
+
       console.log(
-        `Fetched ${market.symbol} ${window.label}: ${rows.length} rows (${formatIsoDate(window.startDate)} -> ${formatIsoDate(window.endDate)})`,
+        `Synced ${market.title} via ${market.symbol}, fetched=${totalRowsFetched}, stored=${count}, latest=${latest?.date.toISOString().slice(0, 10)}`,
       );
     }
 
-    const latest = await prisma.dailyPrice.findFirst({
-      where: { symbol: market.symbol },
-      orderBy: { date: "desc" },
-      select: { date: true },
-    });
-    const count = await prisma.dailyPrice.count({
-      where: { symbol: market.symbol },
-    });
-
-    console.log(
-      `Synced ${market.title} via ${market.symbol}, fetched=${totalRowsFetched}, stored=${count}, latest=${latest?.date.toISOString().slice(0, 10)}`,
+    await markFormalEodCheckpoint(true, "Formal EOD sync completed by sync:data.");
+  } catch (error) {
+    await markFormalEodCheckpoint(
+      false,
+      error instanceof Error ? error.message : "Unknown sync:data error.",
     );
+    throw error;
   }
 }
 

@@ -17,6 +17,11 @@ const MENU_ITEMS = [
     label: "开发日志",
     description: "查看产品迭代脉络与设计决策。",
   },
+  {
+    href: "/forex",
+    label: "汇率观察",
+    description: "补充观察美元相关汇率与区间变化。",
+  },
 ] as const;
 
 export function SiteMenu() {

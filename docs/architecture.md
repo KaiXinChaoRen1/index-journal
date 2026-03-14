@@ -30,13 +30,14 @@ Index Journal 当前解决的是一个具体而持续的个人需求：
 
 当前链路如下：
 
-1. 同步脚本调用 Twelve Data `time_series`
-2. 分别拉取 `SPY` 和 `QQQ`
+1. 早晨快照脚本调用 Twelve Data `quote`（仅 `SPY` / `QQQ`）
+2. 正式日线脚本调用 Twelve Data `time_series`
 3. 初始化时尽量补齐长期历史
 4. 后续同步只刷新最近一小段时间
-5. 日线以 `symbol + date` 幂等写入 `DailyPrice`
-6. 服务层从数据库读取完整或指定范围的日线
-7. 本地计算指标并输出给页面或 API
+5. 快照以 `symbol + snapshotDate` 幂等写入 `MorningCloseSnapshot`
+6. 日线以 `symbol + date` 幂等写入 `DailyPrice`
+7. 服务层读取快照与日线，按时段决定首页头部口径
+8. 指标与图表始终使用正式日线计算并输出给页面或 API
 
 当前服务层负责的核心计算包括：
 
@@ -46,17 +47,17 @@ Index Journal 当前解决的是一个具体而持续的个人需求：
 - `5Y / 10Y` 年化收益
 - 历史高点与回撤
 
-## 4. 为什么只存日线，不存计算后的快照
+## 4. 为什么“快照 + 日线”分开存
 
-当前选择把原始日线长期保存下来，而不是把结果固化成单独快照表。
+当前选择把“早晨收盘快照”和“正式日线”分表保存，而不是混在一张表里。
 
 这样做有几个直接好处：
 
-- 计算逻辑可追溯
-- 未来扩指标时不一定要改表
-- 图表、统计和回撤分析都可以复用同一份基础数据
+- 头部快速展示与正式统计口径不互相污染
+- 快照失败或缺失时，正式日线仍可独立工作
+- 图表、统计和回撤分析继续复用 `DailyPrice`
 
-因此这个项目的数据层优先服务“长期可扩展”，而不是短期省事。
+因此这个项目的数据层优先服务“长期可扩展 + 口径可解释”，而不是短期省事。
 
 ## 5. 为什么坚持本地计算指标
 
@@ -108,6 +109,15 @@ Index Journal 当前解决的是一个具体而持续的个人需求：
 - 日常增量刷新
 - 幂等写入 SQLite
 
+### `scripts/sync-morning-snapshot.mjs`
+
+负责：
+
+- 请求 Twelve Data `quote`
+- 生成 `SPY` / `QQQ` 的早晨快照
+- 写入 `MorningCloseSnapshot`
+- 记录 `MORNING_SNAPSHOT` checkpoint
+
 ### `lib/index-data.ts`
 
 负责：
@@ -116,6 +126,16 @@ Index Journal 当前解决的是一个具体而持续的个人需求：
 - 统一计算首页与 API 所需指标
 - 组织图表数据
 - 控制 MAX 抽样等数据层细节
+- 控制首页头部“昨夜收盘快照 / 官方EOD”口径切换
+
+### `lib/dual-track-sync.ts`
+
+负责：
+
+- 启动补偿检查
+- 早晨快照补抓
+- 中午后正式 EOD 补跑
+- 记录同步 checkpoint
 
 ### `app/api/market/route.ts`
 
@@ -158,7 +178,7 @@ Index Journal 当前解决的是一个具体而持续的个人需求：
 
 推荐外部调度策略：
 
-- 北京时间每天 `06:00`
-- 执行 `npm run sync:data`
+- 北京时间每天 `06:00` 执行 `npm run sync:morning`
+- 北京时间每天 `14:00` 执行 `npm run sync:eod`（或 `npm run sync:data`）
 
 这样既满足真实使用需求，也不引入过重的系统复杂度。

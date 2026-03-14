@@ -73,13 +73,8 @@ npm run db:push
 
 推荐时间：
 
-- 北京时间每天 `06:00`
-
-执行命令：
-
-```bash
-npm run sync:data
-```
+- 北京时间每天 `06:00`：`npm run sync:morning`
+- 北京时间每天 `14:00`：`npm run sync:eod`（或 `npm run sync:data`）
 
 ## 6. 出错时先看哪里
 

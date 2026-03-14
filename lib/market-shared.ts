@@ -44,6 +44,16 @@ export function formatIndexValue(value: number) {
   }).format(value);
 }
 
+export function formatFxValue(value: number) {
+  const abs = Math.abs(value);
+  const fractionDigits = abs >= 100 ? 2 : abs >= 10 ? 3 : 4;
+
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
+}
+
 export function formatDate(value: Date) {
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",

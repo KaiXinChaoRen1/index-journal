@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import {
+  getTodayMorningSnapshots,
+  shouldPreferMorningSnapshot,
+} from "@/lib/dual-track-sync";
+import { formatDateTime } from "@/lib/live-price-shared";
+import {
   CHART_RANGES,
   formatDate,
   formatDateOrFallback,
@@ -12,6 +17,19 @@ import {
   type MarketChartData,
   type MarketChartPoint,
 } from "@/lib/market-shared";
+import {
+  calcCagrPct,
+  calcPct,
+  computeChangePct,
+  findFirstOnOrAfter,
+  findLatestOnOrBefore,
+  round,
+  shiftDateByMonths,
+  shiftDateByYears,
+  startOfMonth,
+  startOfWeek,
+  startOfYear,
+} from "@/lib/price-analytics";
 
 export const MARKET_DEFINITIONS = [
   {
@@ -62,88 +80,14 @@ export type MarketCard = {
   drawdownFromAthPct: number | null;
   athClose: number | null;
   athDate: Date | null;
+  headlineMode: "morning_snapshot" | "formal_eod";
+  headlineTime: string;
+  headlineSourceLabel: string;
 };
 
-function cloneDate(date: Date) {
-  return new Date(date.getTime());
-}
-
-// 周 / 月 / 年起点都按 UTC 计算，避免服务器时区把“当天属于哪一周”
-// 这类边界问题算错。这个项目只做日线，所以统一按日期口径处理最稳。
-function startOfWeek(date: Date) {
-  const result = cloneDate(date);
-  const day = result.getUTCDay();
-  const diff = day === 0 ? 6 : day - 1;
-  result.setUTCDate(result.getUTCDate() - diff);
-  return result;
-}
-
-function startOfMonth(date: Date) {
-  const result = cloneDate(date);
-  result.setUTCDate(1);
-  return result;
-}
-
-function startOfYear(date: Date) {
-  const result = cloneDate(date);
-  result.setUTCMonth(0, 1);
-  return result;
-}
-
-function shiftDateByMonths(date: Date, months: number) {
-  const result = cloneDate(date);
-  result.setUTCMonth(result.getUTCMonth() - months);
-  return result;
-}
-
-function shiftDateByYears(date: Date, years: number) {
-  const result = cloneDate(date);
-  result.setUTCFullYear(result.getUTCFullYear() - years);
-  return result;
-}
-
-function calcPct(currentValue: number, baseValue: number) {
-  return ((currentValue - baseValue) / baseValue) * 100;
-}
-
-function calcCagrPct(currentValue: number, baseValue: number, years: number) {
-  return (Math.pow(currentValue / baseValue, 1 / years) - 1) * 100;
-}
-
-function round(value: number) {
-  return Number(value.toFixed(4));
-}
-
-// 周涨跌、月涨跌、YTD 会从“该周期起点之后的首个交易日”开始算，
-// 因为自然日并不保证是交易日。
-function findFirstOnOrAfter(rows: DailyPriceRecord[], targetDate: Date) {
-  return rows.find((row) => row.date.getTime() >= targetDate.getTime()) ?? null;
-}
-
-// 长周期收益需要遵守“如果目标日不是交易日，就取它之前最近的交易日”。
-// 这样 1Y / 5Y / 10Y 的口径才稳定，也更贴近日线数据的真实可得范围。
-function findLatestOnOrBefore(rows: DailyPriceRecord[], targetDate: Date) {
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    if (rows[index].date.getTime() <= targetDate.getTime()) {
-      return rows[index];
-    }
-  }
-
-  return null;
-}
-
-function computeChangePct(
-  latestClose: number,
-  rows: DailyPriceRecord[],
-  targetDate: Date,
-): number | null {
-  const baseRow = findLatestOnOrBefore(rows, targetDate);
-
-  if (!baseRow) {
-    return null;
-  }
-
-  return round(calcPct(latestClose, baseRow.close));
+function formatUsEasternMidnight(tradingDate: Date) {
+  const date = tradingDate.toISOString().slice(0, 10);
+  return `${date} 00:00:00 ET`;
 }
 
 function computeAnnualizedReturnPct(
@@ -200,8 +144,6 @@ function downsampleChartRows(rows: DailyPriceRecord[]) {
   return { rows: sampled, isSampled: true };
 }
 
-// 所有首页指标都集中在这里组装，API 和页面只消费结果。
-// 这样以后扩指标时，不需要把计算逻辑散落到 route 或组件里。
 function buildMarketCard(
   market: (typeof MARKET_DEFINITIONS)[number],
   rows: DailyPriceRecord[],
@@ -253,23 +195,50 @@ function buildMarketCard(
     drawdownFromAthPct: athRow ? round(calcPct(latest.close, athRow.close)) : null,
     athClose: athRow ? round(athRow.close) : null,
     athDate: athRow ? athRow.date : null,
+    headlineMode: "formal_eod",
+    headlineTime: formatUsEasternMidnight(latest.date),
+    headlineSourceLabel: "Twelve Data Time Series (1day)",
   };
 }
 
 export async function getMarketCards() {
-  const cards = await Promise.all(
-    MARKET_DEFINITIONS.map(async (market) => {
-      // 长期指标依赖完整历史，因此这里读取该 ETF 的全部日线。
-      const rows = await prisma.dailyPrice.findMany({
-        where: { symbol: market.symbol },
-        orderBy: { date: "asc" },
-      });
+  const [cards, snapshots, preferSnapshot] = await Promise.all([
+    Promise.all(
+      MARKET_DEFINITIONS.map(async (market) => {
+        const rows = await prisma.dailyPrice.findMany({
+          where: { symbol: market.symbol },
+          orderBy: { date: "asc" },
+        });
 
-      return buildMarketCard(market, rows);
-    }),
-  );
+        return buildMarketCard(market, rows);
+      }),
+    ),
+    getTodayMorningSnapshots(),
+    shouldPreferMorningSnapshot(),
+  ]);
 
-  return cards.filter((card): card is MarketCard => card !== null);
+  const normalized = cards.filter((card): card is MarketCard => card !== null);
+
+  if (!preferSnapshot) {
+    return normalized;
+  }
+
+  return normalized.map((card) => {
+    const snapshot = snapshots.get(card.symbol);
+
+    if (!snapshot) {
+      return card;
+    }
+
+    return {
+      ...card,
+      currentPrice: snapshot.price,
+      dailyChangePct: snapshot.percentChange,
+      headlineMode: "morning_snapshot" as const,
+      headlineTime: `${formatDateTime(snapshot.sourceTimestamp)} UTC`,
+      headlineSourceLabel: snapshot.sourceLabel,
+    };
+  });
 }
 
 export async function getMarketChartData(
@@ -298,7 +267,6 @@ export async function getMarketChartData(
     startDate === null
       ? rows
       : rows.filter((row) => row.date.getTime() >= startDate.getTime());
-  // 只有 MAX 视图需要抽样。其他区间优先保留完整日线，保证用户看到的趋势足够真实。
   const normalizedRows = range === "MAX" ? downsampleChartRows(filteredRows) : { rows: filteredRows, isSampled: false };
 
   return {
@@ -348,6 +316,9 @@ export async function getMarketApiPayload() {
         drawdownFromAthPct: card.drawdownFromAthPct,
         athClose: card.athClose,
         athDate: card.athDate ? card.athDate.toISOString().slice(0, 10) : null,
+        headlineMode: card.headlineMode,
+        headlineTime: card.headlineTime,
+        headlineSourceLabel: card.headlineSourceLabel,
       },
     ]),
   );

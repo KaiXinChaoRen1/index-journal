@@ -8,8 +8,11 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "lint": "eslint",
+    "test": "vitest run",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "sync:morning": "node scripts/sync-morning-snapshot.mjs",
+    "sync:eod": "node scripts/sync-index-data.mjs",
     "sync:data": "node scripts/sync-index-data.mjs",
     "setup:data": "npm run db:generate && npm run db:push && npm run sync:data"
   },
@@ -26,6 +29,7 @@
     "eslint": "^9.36.0",
     "eslint-config-next": "^16.1.6",
     "prisma": "^6.16.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

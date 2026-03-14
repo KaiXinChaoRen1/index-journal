@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import {
   CHART_RANGES,
   formatDate,
+  formatFxValue,
   formatIndexValue,
   getDefaultChartRange,
   type ChartRange,
@@ -14,6 +15,9 @@ type MarketChartProps = {
   symbol: string;
   title: string;
   initialData: MarketChartData;
+  apiPath?: string;
+  valueType?: "index" | "fx";
+  copyText?: string;
 };
 
 const CHART_LINE_COLOR = "#2f6840";
@@ -42,7 +46,14 @@ function getPointCoordinates(
   }));
 }
 
-export function MarketChart({ symbol, title, initialData }: MarketChartProps) {
+export function MarketChart({
+  symbol,
+  title,
+  initialData,
+  apiPath = "/api/market/chart",
+  valueType = "index",
+  copyText = `${title} 的趋势图只负责帮助快速看方向，详细解读仍以下方指标为主。`,
+}: MarketChartProps) {
   const [range, setRange] = useState<ChartRange>(getDefaultChartRange());
   const [chartData, setChartData] = useState(initialData);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +74,7 @@ export function MarketChart({ symbol, title, initialData }: MarketChartProps) {
     startTransition(async () => {
       try {
         setError(null);
-        const response = await fetch(`/api/market/chart?symbol=${symbol}&range=${nextRange}`, {
+        const response = await fetch(`${apiPath}?symbol=${encodeURIComponent(symbol)}&range=${nextRange}`, {
           cache: "no-store",
         });
 
@@ -95,13 +106,14 @@ export function MarketChart({ symbol, title, initialData }: MarketChartProps) {
   const latestCoordinate = safeCoordinates.at(-1) ?? null;
   const latestPoint = chartData.points.at(-1) ?? null;
   const firstPoint = chartData.points.at(0) ?? null;
+  const valueFormatter = valueType === "fx" ? formatFxValue : formatIndexValue;
 
   return (
     <section className="chart-panel">
       <div className="chart-head">
         <div>
           <p className="metric-group-title">走势</p>
-          <p className="chart-copy">{title} 的趋势图只负责帮助快速看方向，详细解读仍以下方指标为主。</p>
+          <p className="chart-copy">{copyText}</p>
         </div>
         <div className="range-switcher" role="tablist" aria-label={`${title} 图表范围`}>
           {CHART_RANGES.map((item) => (
@@ -127,11 +139,11 @@ export function MarketChart({ symbol, title, initialData }: MarketChartProps) {
             <div className="chart-axis">
               <div className="chart-axis-item">
                 <span className="chart-axis-label">区间高点</span>
-                <strong>{formatIndexValue(max)}</strong>
+                <strong>{valueFormatter(max)}</strong>
               </div>
               <div className="chart-axis-item">
                 <span className="chart-axis-label">区间低点</span>
-                <strong>{formatIndexValue(min)}</strong>
+                <strong>{valueFormatter(min)}</strong>
               </div>
             </div>
             <svg
@@ -188,11 +200,11 @@ export function MarketChart({ symbol, title, initialData }: MarketChartProps) {
           <div className="chart-meta">
             <span>
               起点 {firstPoint ? formatDate(new Date(`${firstPoint.date}T00:00:00Z`)) : "数据不足"} /{" "}
-              {firstPoint ? formatIndexValue(firstPoint.close) : "数据不足"}
+              {firstPoint ? valueFormatter(firstPoint.close) : "数据不足"}
             </span>
             <span>
               终点 {latestPoint ? formatDate(new Date(`${latestPoint.date}T00:00:00Z`)) : "数据不足"} /{" "}
-              {latestPoint ? formatIndexValue(latestPoint.close) : "数据不足"}
+              {latestPoint ? valueFormatter(latestPoint.close) : "数据不足"}
             </span>
             {chartData.isSampled ? <span>MAX 范围已做轻量抽样，便于页面稳定展示。</span> : null}
           </div>

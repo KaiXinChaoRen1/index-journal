@@ -246,6 +246,15 @@ a {
   gap: 20px;
 }
 
+.forex-core-grid {
+  grid-template-columns: 1fr;
+  margin-bottom: 20px;
+}
+
+.forex-core-card {
+  border-color: rgba(47, 104, 64, 0.24);
+}
+
 .index-card {
   border-radius: 28px;
   padding: 24px;
@@ -290,6 +299,21 @@ a {
 .headline-metric span {
   display: inline-block;
   margin-top: 10px;
+}
+
+.live-price-meta {
+  max-width: 15rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.live-price-status {
+  font-size: 1.2rem;
+}
+
+.live-price-status.error {
+  color: var(--negative);
 }
 
 .metric-table {

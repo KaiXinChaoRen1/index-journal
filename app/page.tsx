@@ -1,5 +1,6 @@
 import { MarketChart } from "@/app/components/market-chart";
 import { SiteMenu } from "@/app/components/site-menu";
+import { ensureStartupCompensation } from "@/lib/dual-track-sync";
 import {
   formatDate,
   formatDateOrFallback,
@@ -12,7 +13,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// 把数值映射成语义化样式类，页面层只关心“涨 / 跌 / 平”三种状态。
 function getTone(value: number) {
   if (value > 0) {
     return "positive";
@@ -45,6 +45,7 @@ function MetricRow({
 }
 
 export default async function HomePage() {
+  await ensureStartupCompensation();
   const cards = await getMarketCards();
   const defaultCharts = await getDefaultMarketCharts();
 
@@ -83,7 +84,10 @@ export default async function HomePage() {
                 </div>
                 <div className="headline-metric">
                   <p>{formatIndexValue(card.currentPrice)}</p>
-                  <span>最新收盘价</span>
+                  <span>
+                    {card.headlineMode === "morning_snapshot" ? "昨夜收盘快照" : "官方EOD"} ·{" "}
+                    {card.headlineTime}
+                  </span>
                 </div>
               </div>
 
@@ -121,6 +125,7 @@ export default async function HomePage() {
 
               <div className="card-footer">
                 <span>数据日期 {formatDate(card.latestDate)}</span>
+                <span>头部价格来源 {card.headlineSourceLabel}</span>
                 <span>{card.symbol} 作为指数替代追踪</span>
                 <span>
                   历史高点 {card.athClose ? formatIndexValue(card.athClose) : "数据不足"} /{" "}

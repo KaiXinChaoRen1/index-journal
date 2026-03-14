@@ -28,6 +28,7 @@ Index Journal 是一个围绕指数投资、市场观察、AI 协作开发与个
 4. 提供首页卡片与走势图
 5. 提供 `/api/market` 和 `/api/market/chart`
 6. 提供“开发日志”页面，记录产品取舍和项目定位
+7. 提供“昨夜收盘快照 + 官方EOD”双轨展示口径（仅首页头部价格）
 
 当前明确不做：
 
@@ -66,6 +67,12 @@ Index Journal 是一个围绕指数投资、市场观察、AI 协作开发与个
 当前数据源：
 
 - Twelve Data `time_series`
+- Twelve Data `quote`（仅用于首页早晨快照）
+
+口径术语：
+
+- `昨夜收盘快照`：北京早晨优先展示的快速口径，用于先看昨晚收盘方向
+- `官方EOD`：官方日线最终口径，用于正式统计、长期指标与图表
 
 为什么先用 ETF 替代指数本体：
 
@@ -100,6 +107,13 @@ npm run db:push
 
 ```bash
 npm run sync:data
+```
+
+可选脚本（双轨同步）：
+
+```bash
+npm run sync:morning
+npm run sync:eod
 ```
 
 5. 启动服务

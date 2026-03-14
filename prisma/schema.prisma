@@ -25,3 +25,35 @@ model DailyPrice {
   @@unique([symbol, date])
   @@index([symbol, date])
 }
+
+model MorningCloseSnapshot {
+  id              Int      @id @default(autoincrement())
+  symbol          String
+  snapshotDate    DateTime
+  price           Float
+  previousClose   Float
+  change          Float
+  percentChange   Float
+  sourceTimestamp DateTime
+  sourceLabel     String
+  fetchedAt       DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([symbol, snapshotDate])
+  @@index([snapshotDate, symbol])
+}
+
+model SyncCheckpoint {
+  id          Int      @id @default(autoincrement())
+  jobType     String
+  bizDate     DateTime
+  isSuccess   Boolean
+  message     String?
+  completedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([jobType, bizDate])
+  @@index([bizDate, jobType])
+}
