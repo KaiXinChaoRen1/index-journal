@@ -56,14 +56,18 @@ export function SiteMenu() {
         aria-haspopup="menu"
         onClick={() => setIsOpen((current) => !current)}
       >
-        <span />
-        <span />
-        <span />
+        <span className="menu-trigger-icon" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+        <span className="menu-trigger-label">导航</span>
       </button>
 
       {isOpen ? (
         <nav className="menu-popover" aria-label="页面导航">
-          <p className="menu-title">页面导航</p>
+          <p className="menu-title">站点导航</p>
+          <p className="menu-copy">低频但有价值的内容放在这里，首页继续保持清晰和克制。</p>
           <div className="menu-list">
             {MENU_ITEMS.map((item) => {
               const isActive = pathname === item.href;
@@ -75,6 +79,7 @@ export function SiteMenu() {
                   className={isActive ? "menu-link active" : "menu-link"}
                   onClick={() => setIsOpen(false)}
                 >
+                  <span className="menu-link-kicker">{isActive ? "当前页" : "页面入口"}</span>
                   <strong>{item.label}</strong>
                   <span>{item.description}</span>
                 </Link>

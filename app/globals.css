@@ -44,7 +44,9 @@ a {
 .page-topbar {
   display: flex;
   justify-content: flex-start;
-  margin-bottom: 22px;
+  align-items: center;
+  min-height: 56px;
+  margin-bottom: 28px;
 }
 
 .site-menu {
@@ -53,41 +55,64 @@ a {
 
 .menu-trigger {
   display: inline-flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  width: 52px;
-  height: 52px;
-  padding: 0 14px;
+  align-items: center;
+  gap: 12px;
+  min-width: 96px;
+  min-height: 52px;
+  padding: 0 16px;
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: rgba(255, 250, 242, 0.78);
-  box-shadow: var(--shadow);
+  background: rgba(255, 250, 242, 0.84);
+  box-shadow: 0 12px 30px rgba(49, 38, 23, 0.08);
   cursor: pointer;
   transition:
     transform 180ms ease,
     background 180ms ease,
-    border-color 180ms ease;
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .menu-trigger:hover,
 .menu-trigger.active {
   background: var(--surface-strong);
-  border-color: rgba(58, 46, 32, 0.22);
+  border-color: rgba(58, 46, 32, 0.24);
+  box-shadow: 0 16px 34px rgba(49, 38, 23, 0.14);
   transform: translateY(-1px);
 }
 
-.menu-trigger span {
+.menu-trigger:focus-visible,
+.menu-link:focus-visible {
+  outline: 2px solid rgba(47, 104, 64, 0.28);
+  outline-offset: 3px;
+}
+
+.menu-trigger-icon {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.menu-trigger-icon span {
   display: block;
   width: 100%;
-  height: 1.5px;
+  height: 1.75px;
   border-radius: 999px;
   background: #2c241b;
 }
 
+.menu-trigger-label {
+  color: var(--text);
+  font-size: 0.94rem;
+  letter-spacing: 0.04em;
+}
+
 .menu-popover,
 .log-card,
-.dev-status-panel {
+.dev-status-panel,
+.log-note-card {
   backdrop-filter: blur(18px);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -96,43 +121,59 @@ a {
 
 .menu-popover {
   position: absolute;
-  top: calc(100% + 12px);
+  top: calc(100% + 14px);
   left: 0;
   z-index: 20;
-  width: min(320px, calc(100vw - 48px));
-  padding: 16px;
+  width: min(356px, calc(100vw - 48px));
+  padding: 18px;
   border-radius: 24px;
 }
 
 .menu-title {
-  margin: 0 0 12px;
+  margin: 0;
   color: var(--muted);
   font-size: 0.78rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
+.menu-copy {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
 .menu-list {
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .menu-link {
   display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: 18px;
+  gap: 7px;
+  padding: 14px 16px;
+  border-radius: 20px;
   border: 1px solid transparent;
   color: var(--muted);
   transition:
     background 180ms ease,
     border-color 180ms ease,
-    color 180ms ease;
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.menu-link-kicker {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .menu-link strong {
   color: var(--text);
-  font-size: 1rem;
+  font-size: 1.04rem;
 }
 
 .menu-link span {
@@ -143,12 +184,17 @@ a {
 .menu-link:hover,
 .menu-link.active {
   background: rgba(255, 250, 242, 0.9);
-  border-color: rgba(58, 46, 32, 0.12);
+  border-color: rgba(58, 46, 32, 0.14);
+  transform: translateX(2px);
 }
 
 .menu-link.active strong,
 .menu-link.active {
   color: var(--text);
+}
+
+.menu-link.active .menu-link-kicker {
+  color: #2f6840;
 }
 
 .hero {
@@ -467,6 +513,28 @@ a {
   line-height: 1.7;
 }
 
+.log-note-card {
+  margin-top: 20px;
+  padding: 24px 26px;
+  border-radius: 24px;
+}
+
+.log-note-card h2,
+.log-note-card p {
+  margin: 0;
+}
+
+.log-note-card h2 {
+  margin-top: 2px;
+  font-size: 1.3rem;
+}
+
+.log-note-card p {
+  margin-top: 12px;
+  color: var(--muted);
+  line-height: 1.72;
+}
+
 .dev-status-panel {
   margin-top: 24px;
   padding: 22px;
@@ -566,5 +634,15 @@ a {
   .chart-axis-item {
     min-width: 0;
     flex: 1;
+  }
+
+  .menu-trigger {
+    min-width: 88px;
+    gap: 10px;
+    padding: 0 14px;
+  }
+
+  .menu-popover {
+    width: min(340px, calc(100vw - 32px));
   }
 }

@@ -54,6 +54,19 @@ export default function DevelopmentLogPage() {
         ))}
       </section>
 
+      <section className="log-note-card">
+        <p className="metric-group-title">界面小注</p>
+        <h2>为什么叫“汉堡图标”</h2>
+        <p>
+          左上角这个三条横线的导航入口，常被叫作 hamburger icon，是因为它的外形很像汉堡的上下面包和中间夹层。
+          它在数字产品里经常被拿来承载导航，但也一直伴随一个老问题：把入口藏起来，会不会让信息层级变得更难发现。
+        </p>
+        <p>
+          在 Index Journal 里继续使用它，是因为当前站点页面很少，确实适合一个轻量入口；但我们也刻意把它做得更像头部导航的一部分，
+          而不是一个神秘的小按钮，避免它既隐藏信息，又显得过于突兀。
+        </p>
+      </section>
+
       {showDevStatus ? (
         <section className="dev-status-panel">
           <p className="metric-group-title">开发态信息</p>
