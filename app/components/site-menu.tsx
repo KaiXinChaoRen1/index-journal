@@ -27,6 +27,11 @@ const MENU_ITEMS = [
     label: "BTC 观察",
     description: "补充观察 BTC/USD 的位置与区间变化。",
   },
+  {
+    href: "/cn-funds",
+    label: "国内场内基金",
+    description: "查看固定基金列表的最近季度报告抓取结果。",
+  },
 ] as const;
 
 export function SiteMenu() {

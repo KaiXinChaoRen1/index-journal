@@ -1,11 +1,11 @@
 import { MarketChart } from "@/app/components/market-chart";
+import { MetricRow } from "@/app/components/metric-row";
 import { ManualRefreshControl } from "@/app/components/manual-refresh-control";
 import { SiteMenu } from "@/app/components/site-menu";
 import { formatFxValue } from "@/lib/market-shared";
 import { getSnapshotGroupState, getSnapshotRefreshAvailability } from "@/lib/manual-snapshot";
 import {
   formatDate,
-  formatPercentOrFallback,
   getDefaultForexCharts,
   getForexCards,
   getForexMissingDataMessage,
@@ -13,39 +13,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-function getTone(value: number) {
-  if (value > 0) {
-    return "positive";
-  }
-
-  if (value < 0) {
-    return "negative";
-  }
-
-  return "neutral";
-}
-
-function getNullableTone(value: number | null) {
-  return value === null ? "neutral" : getTone(value);
-}
-
 function formatOfficialFxTime(latestDate: Date) {
   return `${latestDate.toISOString().slice(0, 10)} 00:00:00 UTC`;
-}
-
-function MetricRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | null;
-}) {
-  return (
-    <div className="metric-row">
-      <span>{label}</span>
-      <strong className={getNullableTone(value)}>{formatPercentOrFallback(value)}</strong>
-    </div>
-  );
 }
 
 export default async function ForexPage() {
@@ -57,6 +26,15 @@ export default async function ForexPage() {
   const availability = getSnapshotRefreshAvailability("forex");
   const coreCard = cards.find((card) => card.priority === "core") ?? null;
   const otherCards = cards.filter((card) => card.priority !== "core");
+  const coreSnapshot = coreCard ? snapshotState.payload[coreCard.symbol] : null;
+  const coreCurrentPrice = coreCard ? (coreSnapshot ? coreSnapshot.price : coreCard.currentPrice) : null;
+  const coreSourceTime = coreCard
+    ? coreSnapshot
+      ? `${coreSnapshot.sourceTimestamp} UTC`
+      : formatOfficialFxTime(coreCard.latestDate)
+    : null;
+  const coreSourceLabel = coreSnapshot ? coreSnapshot.sourceLabel : "Twelve Data Time Series (1day)";
+  const corePriceType = coreSnapshot ? "当前价格口径 手动快照" : "当前价格口径 官方EOD";
 
   return (
     <main className="page-shell">
@@ -94,59 +72,47 @@ export default async function ForexPage() {
         <>
           {coreCard ? (
             <section className="card-grid forex-core-grid">
-              {(() => {
-                const snapshot = snapshotState.payload[coreCard.symbol];
-                const currentPrice = snapshot ? snapshot.price : coreCard.currentPrice;
-                const sourceTime = snapshot
-                  ? `${snapshot.sourceTimestamp} UTC`
-                  : formatOfficialFxTime(coreCard.latestDate);
-                const sourceLabel = snapshot ? snapshot.sourceLabel : "Twelve Data Time Series (1day)";
-                const currentPriceType = snapshot ? "当前价格口径 手动快照" : "当前价格口径 官方EOD";
+              <article className="index-card forex-core-card">
+                <div className="card-head">
+                  <div>
+                    <p className="index-code">{coreCard.symbol}</p>
+                    <h2>{coreCard.title}</h2>
+                    <p className="hero-copy card-copy">{coreCard.description}</p>
+                  </div>
+                  <div className="headline-metric">
+                    <p>{formatFxValue(coreCurrentPrice ?? coreCard.currentPrice)}</p>
+                    <span>{coreSnapshot ? "手动快照时间" : "官方数据时间"} · {coreSourceTime}</span>
+                  </div>
+                </div>
 
-                return (
-                  <article className="index-card forex-core-card">
-                    <div className="card-head">
-                      <div>
-                        <p className="index-code">{coreCard.symbol}</p>
-                        <h2>{coreCard.title}</h2>
-                        <p className="hero-copy card-copy">{coreCard.description}</p>
-                      </div>
-                      <div className="headline-metric">
-                        <p>{formatFxValue(currentPrice)}</p>
-                        <span>{snapshot ? "手动快照时间" : "官方数据时间"} · {sourceTime}</span>
-                      </div>
-                    </div>
+                <div className="metric-table">
+                  <div className="metric-group">
+                    <p className="metric-group-title">区间变化</p>
+                    <MetricRow label="日涨跌" value={coreCard.dailyChangePct} />
+                    <MetricRow label="周涨跌" value={coreCard.weeklyChangePct} />
+                    <MetricRow label="月涨跌" value={coreCard.monthlyChangePct} />
+                    <MetricRow label="6个月" value={coreCard.sixMonthChangePct} />
+                    <MetricRow label="1年" value={coreCard.oneYearChangePct} />
+                  </div>
+                </div>
 
-                    <div className="metric-table">
-                      <div className="metric-group">
-                        <p className="metric-group-title">区间变化</p>
-                        <MetricRow label="日涨跌" value={coreCard.dailyChangePct} />
-                        <MetricRow label="周涨跌" value={coreCard.weeklyChangePct} />
-                        <MetricRow label="月涨跌" value={coreCard.monthlyChangePct} />
-                        <MetricRow label="6个月" value={coreCard.sixMonthChangePct} />
-                        <MetricRow label="1年" value={coreCard.oneYearChangePct} />
-                      </div>
-                    </div>
+                <MarketChart
+                  symbol={coreCard.symbol}
+                  title={coreCard.title}
+                  initialData={defaultCharts[coreCard.symbol]}
+                  apiPath="/api/forex/chart"
+                  valueType="fx"
+                  copyText={`${coreCard.symbol} 趋势图用于快速判断方向，详细判断以下方区间变化为准。`}
+                />
 
-                    <MarketChart
-                      symbol={coreCard.symbol}
-                      title={coreCard.title}
-                      initialData={defaultCharts[coreCard.symbol]}
-                      apiPath="/api/forex/chart"
-                      valueType="fx"
-                      copyText={`${coreCard.symbol} 趋势图用于快速判断方向，详细判断以下方区间变化为准。`}
-                    />
-
-                    <div className="card-footer">
-                      <span>数据日期 {formatDate(coreCard.latestDate)}</span>
-                      <span>头部价格来源 {sourceLabel}</span>
-                      <span>{currentPriceType}</span>
-                      <span>当前价格时间 {sourceTime}</span>
-                      <span>方向口径 {coreCard.symbol}</span>
-                    </div>
-                  </article>
-                );
-              })()}
+                <div className="card-footer">
+                  <span>数据日期 {formatDate(coreCard.latestDate)}</span>
+                  <span>头部价格来源 {coreSourceLabel}</span>
+                  <span>{corePriceType}</span>
+                  <span>当前价格时间 {coreSourceTime}</span>
+                  <span>方向口径 {coreCard.symbol}</span>
+                </div>
+              </article>
             </section>
           ) : null}
 

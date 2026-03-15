@@ -136,6 +136,7 @@ npm run dev
 - `/log`：开发日志 / 产品日志
 - `/forex`：汇率观察
 - `/btc`：BTC 观察
+- `/cn-funds`：国内场内基金（固定基金季报抓取验证）
 
 当前接口：
 
@@ -145,6 +146,7 @@ npm run dev
 - `GET /api/forex/chart?symbol=USD/CNY&range=1Y`
 - `GET /api/btc`
 - `GET /api/btc/chart?symbol=BTC/USD&range=1Y`
+- `GET /api/cn-funds/quarterly`
 - `GET /api/manual-snapshot/[group]`
 - `POST /api/manual-snapshot/[group]`
 

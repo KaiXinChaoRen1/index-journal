@@ -1,48 +1,17 @@
 import { MarketChart } from "@/app/components/market-chart";
+import { MetricRow } from "@/app/components/metric-row";
 import { ManualRefreshControl } from "@/app/components/manual-refresh-control";
 import { SiteMenu } from "@/app/components/site-menu";
 import { formatIndexValue } from "@/lib/market-shared";
 import { getSnapshotGroupState, getSnapshotRefreshAvailability } from "@/lib/manual-snapshot";
 import {
   formatDate,
-  formatPercentOrFallback,
   getBtcCard,
   getBtcMissingDataMessage,
   getDefaultBtcChart,
 } from "@/lib/btc-data";
 
 export const dynamic = "force-dynamic";
-
-function getTone(value: number) {
-  if (value > 0) {
-    return "positive";
-  }
-
-  if (value < 0) {
-    return "negative";
-  }
-
-  return "neutral";
-}
-
-function getNullableTone(value: number | null) {
-  return value === null ? "neutral" : getTone(value);
-}
-
-function MetricRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | null;
-}) {
-  return (
-    <div className="metric-row">
-      <span>{label}</span>
-      <strong className={getNullableTone(value)}>{formatPercentOrFallback(value)}</strong>
-    </div>
-  );
-}
 
 export default async function BtcPage() {
   const [card, defaultChart, snapshotState] = await Promise.all([

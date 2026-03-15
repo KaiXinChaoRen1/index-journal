@@ -349,6 +349,58 @@ a {
   border-bottom: 0;
 }
 
+.performance-table-wrap {
+  margin-top: 12px;
+}
+
+.performance-table-title {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.performance-table-scroll {
+  overflow-x: auto;
+  border: 1px solid rgba(58, 46, 32, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 250, 242, 0.84);
+}
+
+.performance-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.performance-table th,
+.performance-table td {
+  padding: 8px 10px;
+  border-bottom: 1px dashed rgba(58, 46, 32, 0.12);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.performance-table th:first-child,
+.performance-table td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: rgba(255, 250, 242, 0.95);
+}
+
+.performance-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.performance-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 .chart-panel {
   margin: 6px 0 24px;
   padding: 18px;
