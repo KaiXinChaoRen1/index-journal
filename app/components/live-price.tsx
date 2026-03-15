@@ -28,12 +28,12 @@ export function LivePrice({ symbol, mode }: LivePriceProps) {
   useEffect(() => {
     let cancelled = false;
 
+    // 重置为加载中只在 symbol 变化（或首次挂载）时做一次，
+    // 轮询期间不重置，避免每 60 秒闪一次"加载中..."把已有数据清掉。
+    setState({ status: "loading", data: null, error: null });
+
     async function load() {
       try {
-        if (!cancelled) {
-          setState({ status: "loading", data: null, error: null });
-        }
-
         const response = await fetch(`/api/live-price?symbol=${encodeURIComponent(symbol)}`, {
           cache: "no-store",
         });
