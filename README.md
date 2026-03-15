@@ -137,8 +137,8 @@ npm run dev
 - `/log`：开发日志 / 产品日志
 - `/forex`：汇率观察
 - `/btc`：BTC 观察
-- `/cn-funds`：国内场内基金（固定基金季报抓取验证）
-- `/otc-funds`：场外基金（固定基金季报多份额净值表现）
+- `/cn-funds`：国内场内基金（本地保存的季报跟踪）
+- `/otc-funds`：场外基金（本地保存的季报跟踪）
 
 当前接口：
 
@@ -150,14 +150,17 @@ npm run dev
 - `GET /api/btc/chart?symbol=BTC/USD&range=1Y`
 - `GET /api/cn-funds/quarterly`
 - `GET /api/otc-funds/quarterly`
+- `POST /api/cn-funds/quarterly`
+- `POST /api/otc-funds/quarterly`
 - `GET /api/manual-snapshot/[group]`
 - `POST /api/manual-snapshot/[group]`
 
 季报解析与刷新：
 
-- `/cn-funds` 与 `/otc-funds` 抓取证监会披露季报，提取 “3.2.1 基金份额净值增长率及其与同期业绩比较基准收益率的比较”
+- `/cn-funds` 与 `/otc-funds` 默认只读取本地 SQLite 中已保存的季报解析结果
+- 手动输入 6 位基金代码或点击页面内“重新抓取”时，才会请求证监会披露季报，提取 “3.2.1 基金份额净值增长率及其与同期业绩比较基准收益率的比较”
 - 支持多份额（A/C/I 等）分表展示
-- 接口默认 30 分钟缓存；可用 `?refresh=1` 强制重新抓取
+- 当前不再依赖固定代码配置，基金跟踪列表由本地数据库保存
 
 手动刷新策略：
 

@@ -589,6 +589,58 @@ a {
   gap: 12px;
 }
 
+.fund-tool-head {
+  align-items: flex-start;
+}
+
+.fund-tool-title {
+  margin: 0;
+  font-size: 1.32rem;
+}
+
+.fund-code-form {
+  min-width: min(100%, 24rem);
+}
+
+.fund-code-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fund-code-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fund-code-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(58, 46, 32, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 250, 242, 0.92);
+  color: var(--text);
+  font: inherit;
+}
+
+.fund-code-input:focus {
+  outline: 2px solid rgba(47, 104, 64, 0.18);
+  outline-offset: 2px;
+}
+
+.fund-card-headline {
+  max-width: 15rem;
+}
+
+.fund-card-button {
+  margin-top: 12px;
+}
+
 .refresh-button {
   padding: 8px 14px;
   border: 1px solid rgba(58, 46, 32, 0.2);
@@ -775,5 +827,15 @@ a {
 
   .menu-popover {
     width: min(340px, calc(100vw - 32px));
+  }
+
+  .fund-code-form {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .fund-code-control {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

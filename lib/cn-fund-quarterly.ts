@@ -1,42 +1,49 @@
-import { CN_FUND_CODES, type CnFundCode } from "@/lib/cn-fund-config";
 import mammoth from "mammoth";
+import { prisma } from "@/lib/prisma";
 
 const CSRC_VALIDATE_URL = "http://eid.csrc.gov.cn/fund/disclose/validate_fund.do";
 const CSRC_FUND_DETAIL_URL = "http://eid.csrc.gov.cn/fund/disclose/fund_detail.do";
 const CSRC_ORIGIN = "http://eid.csrc.gov.cn";
-const BATCH_CACHE_TTL_MS = 30 * 60 * 1000;
 const REQUEST_HEADERS = {
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "user-agent":
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
 };
 
-type QuarterlyReportItem = {
+export const FUND_QUARTERLY_KIND = {
+  cn: "cn",
+  otc: "otc",
+} as const;
+
+export type FundQuarterlyKind = (typeof FUND_QUARTERLY_KIND)[keyof typeof FUND_QUARTERLY_KIND];
+
+type NetValuePerformanceRow = {
+  stage: string;
+  values: string[];
+};
+
+type NetValuePerformanceTable = {
+  className: string | null;
+  columns: string[];
+  rows: NetValuePerformanceRow[];
+};
+
+export type QuarterlyReportItem = {
   fundCode: string;
   fundId: string;
   title: string;
   publishDate: string;
   detailUrl: string;
   netValuePerformance: string | null;
-  netValuePerformanceTables: Array<{
-    className: string | null;
-    columns: string[];
-    rows: Array<{
-      stage: string;
-      values: string[];
-    }>;
-  }>;
+  netValuePerformanceTables: NetValuePerformanceTable[];
   netValuePerformanceTable: {
     columns: string[];
-    rows: Array<{
-      stage: string;
-      values: string[];
-    }>;
+    rows: NetValuePerformanceRow[];
   } | null;
   netValuePerformanceStatus: string;
 };
 
-export type CnFundQuarterlyResult = {
+export type FundQuarterlyResult = {
   fundCode: string;
   fundId: string | null;
   fundName: string | null;
@@ -50,6 +57,17 @@ export type CnFundQuarterlyResult = {
   latestQuarterlyReport: QuarterlyReportItem | null;
 };
 
+export type StoredFundQuarterlyResult = FundQuarterlyResult & {
+  lastFetchedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StoredFundQuarterlyListPayload = {
+  generatedAt: string;
+  data: StoredFundQuarterlyResult[];
+};
+
 type FundIdLookupResult =
   | {
       ok: true;
@@ -59,20 +77,6 @@ type FundIdLookupResult =
       ok: false;
       message: string;
     };
-
-type QuarterlyBatchPayload = {
-  generatedAt: string;
-  fromCache: boolean;
-  data: CnFundQuarterlyResult[];
-};
-
-type BatchCacheEntry = {
-  expiresAt: number;
-  generatedAt: string;
-  data: CnFundQuarterlyResult[];
-};
-
-const batchCache = new Map<string, BatchCacheEntry>();
 
 function normalizeText(value: string) {
   return value
@@ -92,6 +96,30 @@ function normalizeDocumentText(value: string) {
     .replace(/--\s*\d+\s*of\s*\d+\s*--/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeFundCodeInput(value: string) {
+  return value.trim();
+}
+
+export function isValidFundCode(value: string) {
+  return /^\d{6}$/.test(normalizeFundCodeInput(value));
+}
+
+function buildFailedResult(fundCode: string, message: string): FundQuarterlyResult {
+  return {
+    fundCode,
+    fundId: null,
+    fundName: null,
+    fundOperationMode: null,
+    fundCategory: null,
+    fundManager: null,
+    fundCustodian: null,
+    fundContractEffectiveDate: null,
+    status: "failed",
+    message,
+    latestQuarterlyReport: null,
+  };
 }
 
 export function isQuarterReport(title: string) {
@@ -171,7 +199,7 @@ function extractQuarterlyReports(html: string, fundCode: string, fundId: string)
   for (const row of rows) {
     const rowHtml = row[1];
     const anchorMatch = rowHtml.match(
-      /<a[^>]*href="([^"]*instance_show_pdf_id\.do\?instanceid=\d+[^"]*)"[^>]*>([\s\S]*?)<\/a>/i,
+      /<a[^>]*href="([^"]*instance_show_[^"]*?instanceid=\d+[^"]*)"[^>]*>([\s\S]*?)<\/a>/i,
     );
 
     if (!anchorMatch) {
@@ -278,6 +306,32 @@ async function parseReportText(detailUrl: string) {
   }
 }
 
+function extractClassMarkers(compactSection: string) {
+  const patterns = [
+    /([A-Z])类(?:基金)?份额?[：:]?阶段?净值增长率/g,
+    /([A-Z])类(?:基金)?份额?净值增长率/g,
+    /([A-Z])份额[：:]?阶段?净值增长率/g,
+    /([A-Z])[：:]?阶段净值增长率/g,
+  ];
+  const markerMap = new Map<number, { className: string; start: number }>();
+
+  for (const pattern of patterns) {
+    for (const match of compactSection.matchAll(pattern)) {
+      const start = match.index ?? -1;
+      if (start < 0) {
+        continue;
+      }
+
+      markerMap.set(start, {
+        className: `${match[1]}类`,
+        start,
+      });
+    }
+  }
+
+  return [...markerMap.values()].sort((left, right) => left.start - right.start);
+}
+
 function extractNetValuePerformanceText(text: string) {
   if (!text) {
     return {
@@ -303,7 +357,21 @@ function extractNetValuePerformanceText(text: string) {
     };
   }
 
-  const lineBreakMarkers = ["阶段", "净值增长率①", "净值增长率标准差②", "业绩比较基准收益率③", "业绩比较基准收益率标准差④", "①-③", "②-④", "过去三个月", "过去六个月", "过去一年", "过去三年", "过去五年", "自基金合同生效起至今"];
+  const lineBreakMarkers = [
+    "阶段",
+    "净值增长率①",
+    "净值增长率标准差②",
+    "业绩比较基准收益率③",
+    "业绩比较基准收益率标准差④",
+    "①-③",
+    "②-④",
+    "过去三个月",
+    "过去六个月",
+    "过去一年",
+    "过去三年",
+    "过去五年",
+    "自基金合同生效起至今",
+  ];
   const columns = ["净值增长率①", "净值增长率标准差②", "业绩比较基准收益率③", "业绩比较基准收益率标准差④", "①-③", "②-④"];
   const rowDefs: Array<{ label: string; pattern: string }> = [
     { label: "过去三个月", pattern: "(?:过去三个月|过去三月)" },
@@ -311,15 +379,15 @@ function extractNetValuePerformanceText(text: string) {
     { label: "过去一年", pattern: "过去一年" },
     { label: "过去三年", pattern: "过去三年" },
     { label: "过去五年", pattern: "过去五年" },
-    { label: "自基金合同生效起至今", pattern: "自基金合同生效起至今" },
+    { label: "自基金合同生效起至今", pattern: "自基金合同生效起" },
   ];
   const parsedTables: Array<{
     className: string | null;
     text: string;
     columns: string[];
-    rows: Array<{ stage: string; values: string[] }>;
+    rows: NetValuePerformanceRow[];
   }> = [];
-  const tokenPattern = /[-+]?\d+(?:\.\d+)?%|-/g;
+  const tokenPattern = /[-+]?\d[\d,]*(?:\.\d+)?%|-/g;
   const parseRows = (compactSection: string) => {
     const rowStarts = rowDefs
       .map((row) => {
@@ -332,7 +400,7 @@ function extractNetValuePerformanceText(text: string) {
       })
       .filter((row) => row.start >= 0)
       .sort((a, b) => a.start - b.start);
-    const rows: Array<{ stage: string; values: string[] }> = [];
+    const rows: NetValuePerformanceRow[] = [];
 
     for (let index = 0; index < rowStarts.length; index += 1) {
       const current = rowStarts[index];
@@ -380,12 +448,7 @@ function extractNetValuePerformanceText(text: string) {
 
     const outputText = formatted.slice(0, 6000);
     const compact = formatted.replace(/\s+/g, "");
-    const classMatches = [...compact.matchAll(/([A-Z])(?:类|份额)?[：:]?阶段净值增长率/g)]
-      .map((match) => ({
-        className: `${match[1]}类`,
-        start: match.index ?? -1,
-      }))
-      .filter((match) => match.start >= 0);
+    const classMatches = extractClassMarkers(compact);
 
     if (classMatches.length >= 2) {
       for (let classIndex = 0; classIndex < classMatches.length; classIndex += 1) {
@@ -426,7 +489,7 @@ function extractNetValuePerformanceText(text: string) {
   }
 
   return {
-    text: parsedTables.map((table) => table.text).join("\n\n"),
+    text: [...new Set(parsedTables.map((table) => table.text))].join("\n\n"),
     tables: parsedTables.map((table) => ({
       className: table.className,
       columns: table.columns,
@@ -475,7 +538,7 @@ async function enrichLatestQuarterlyReportWithNetValue(item: QuarterlyReportItem
 
 export async function getFundIdByCode(fundCode: string): Promise<FundIdLookupResult> {
   try {
-    // 关键口径：真实基金代码不能直接当详情页参数，必须先通过校验接口换取内部 fundId。
+    // 真实基金代码不能直接当详情页参数，必须先通过校验接口换取内部 fundId。
     const body = new URLSearchParams();
     body.set("cFundCode", fundCode);
 
@@ -533,33 +596,29 @@ async function fetchFundDetailById(fundId: string) {
       cache: "no-store",
     });
 
-    if (!response.ok || isLikelyBlockedPage(await response.clone().text())) {
+    const html = await response.text();
+
+    if (!response.ok || isLikelyBlockedPage(html)) {
       return null;
     }
 
-    return await response.text();
+    return html;
   } catch {
     return null;
   }
 }
 
-export async function fetchCnFundLatestQuarterly(fundCode: string): Promise<CnFundQuarterlyResult> {
-  const fundIdResult = await getFundIdByCode(fundCode);
+export async function fetchFundLatestQuarterly(fundCode: string): Promise<FundQuarterlyResult> {
+  const normalizedFundCode = normalizeFundCodeInput(fundCode);
+
+  if (!isValidFundCode(normalizedFundCode)) {
+    return buildFailedResult(normalizedFundCode || fundCode, "基金代码需为 6 位数字。");
+  }
+
+  const fundIdResult = await getFundIdByCode(normalizedFundCode);
 
   if (!fundIdResult.ok) {
-    return {
-      fundCode,
-      fundId: null,
-      fundName: null,
-      fundOperationMode: null,
-      fundCategory: null,
-      fundManager: null,
-      fundCustodian: null,
-      fundContractEffectiveDate: null,
-      status: "failed",
-      message: fundIdResult.message,
-      latestQuarterlyReport: null,
-    };
+    return buildFailedResult(normalizedFundCode, fundIdResult.message);
   }
 
   const fundId = fundIdResult.fundId;
@@ -567,37 +626,19 @@ export async function fetchCnFundLatestQuarterly(fundCode: string): Promise<CnFu
 
   if (!html) {
     return {
-      fundCode,
+      ...buildFailedResult(normalizedFundCode, "未获取到有效详情页。"),
       fundId,
-      fundName: null,
-      fundOperationMode: null,
-      fundCategory: null,
-      fundManager: null,
-      fundCustodian: null,
-      fundContractEffectiveDate: null,
-      status: "failed",
-      message: "未获取到有效详情页。",
-      latestQuarterlyReport: null,
     };
   }
 
   if (!html.includes("资本市场统一信息披露平台")) {
     return {
-      fundCode,
+      ...buildFailedResult(normalizedFundCode, "详情页内容无效。"),
       fundId,
-      fundName: null,
-      fundOperationMode: null,
-      fundCategory: null,
-      fundManager: null,
-      fundCustodian: null,
-      fundContractEffectiveDate: null,
-      status: "failed",
-      message: "详情页内容无效。",
-      latestQuarterlyReport: null,
     };
   }
 
-  const overview = extractFundOverview(html, fundCode);
+  const overview = extractFundOverview(html, normalizedFundCode);
   const resolvedFundCode = overview.fundCode;
   const reports = extractQuarterlyReports(html, resolvedFundCode, fundId);
 
@@ -632,38 +673,130 @@ export async function fetchCnFundLatestQuarterly(fundCode: string): Promise<CnFu
   };
 }
 
-export async function fetchPresetCnFundQuarterlyBatch(
-  codes: readonly string[] = CN_FUND_CODES,
-  options: { forceRefresh?: boolean } = {},
-): Promise<QuarterlyBatchPayload> {
-  const cacheKey = [...codes].join("|");
-  const current = batchCache.get(cacheKey);
-  const now = Date.now();
-
-  if (!options.forceRefresh && current && current.expiresAt > now) {
-    return {
-      generatedAt: current.generatedAt,
-      fromCache: true,
-      data: current.data,
-    };
-  }
-
-  const data = await Promise.all(codes.map((code) => fetchCnFundLatestQuarterly(code)));
-  const generatedAt = new Date().toISOString();
-
-  batchCache.set(cacheKey, {
-    generatedAt,
-    data,
-    expiresAt: now + BATCH_CACHE_TTL_MS,
-  });
+function createStoredFallbackResult(fundCode: string, message: string): StoredFundQuarterlyResult {
+  const now = new Date().toISOString();
 
   return {
-    generatedAt,
-    fromCache: false,
-    data,
+    ...buildFailedResult(fundCode, message),
+    lastFetchedAt: null,
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
-export function getPresetCnFundCodes() {
-  return [...CN_FUND_CODES] as CnFundCode[];
+function parseStoredPayload(payloadJson: string | null, fundCode: string): FundQuarterlyResult {
+  if (!payloadJson) {
+    return buildFailedResult(fundCode, "尚未抓取季报。");
+  }
+
+  try {
+    const parsed = JSON.parse(payloadJson) as Partial<FundQuarterlyResult>;
+
+    if (!parsed || typeof parsed !== "object" || typeof parsed.fundCode !== "string") {
+      return buildFailedResult(fundCode, "本地缓存格式无效。");
+    }
+
+    return {
+      ...buildFailedResult(fundCode, "本地缓存格式无效。"),
+      ...parsed,
+      fundCode: parsed.fundCode || fundCode,
+      latestQuarterlyReport: parsed.latestQuarterlyReport ?? null,
+    };
+  } catch {
+    return buildFailedResult(fundCode, "本地缓存损坏，需重新抓取。");
+  }
+}
+
+function toStoredFundQuarterlyResult(record: {
+  fundCode: string;
+  latestPayloadJson: string | null;
+  lastFetchedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): StoredFundQuarterlyResult {
+  const parsed = parseStoredPayload(record.latestPayloadJson, record.fundCode);
+
+  return {
+    ...parsed,
+    lastFetchedAt: record.lastFetchedAt ? record.lastFetchedAt.toISOString() : null,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export async function listStoredFundQuarterlies(kind: FundQuarterlyKind): Promise<StoredFundQuarterlyListPayload> {
+  const rows = await prisma.fundQuarterlyTracking.findMany({
+    where: {
+      fundKind: kind,
+      isActive: true,
+    },
+    orderBy: [{ lastFetchedAt: "desc" }, { updatedAt: "desc" }, { fundCode: "asc" }],
+  });
+
+  return {
+    generatedAt: new Date().toISOString(),
+    data: rows.map((row) => toStoredFundQuarterlyResult(row)),
+  };
+}
+
+export async function saveTrackedFundQuarterly(kind: FundQuarterlyKind, fundCode: string) {
+  const normalizedFundCode = normalizeFundCodeInput(fundCode);
+
+  if (!isValidFundCode(normalizedFundCode)) {
+    throw new Error("基金代码需为 6 位数字。");
+  }
+
+  const result = await fetchFundLatestQuarterly(normalizedFundCode);
+  const now = new Date();
+  const latestReportDate = result.latestQuarterlyReport?.publishDate
+    ? new Date(`${result.latestQuarterlyReport.publishDate}T00:00:00Z`)
+    : null;
+
+  const record = await prisma.fundQuarterlyTracking.upsert({
+    where: {
+      fundKind_fundCode: {
+        fundKind: kind,
+        fundCode: result.fundCode,
+      },
+    },
+    update: {
+      isActive: true,
+      latestPayloadJson: JSON.stringify(result),
+      lastFetchedAt: now,
+      latestReportDate,
+    },
+    create: {
+      fundKind: kind,
+      fundCode: result.fundCode,
+      isActive: true,
+      latestPayloadJson: JSON.stringify(result),
+      lastFetchedAt: now,
+      latestReportDate,
+    },
+  });
+
+  return toStoredFundQuarterlyResult(record);
+}
+
+export async function getStoredFundQuarterly(kind: FundQuarterlyKind, fundCode: string) {
+  const normalizedFundCode = normalizeFundCodeInput(fundCode);
+
+  if (!isValidFundCode(normalizedFundCode)) {
+    return createStoredFallbackResult(normalizedFundCode || fundCode, "基金代码需为 6 位数字。");
+  }
+
+  const record = await prisma.fundQuarterlyTracking.findUnique({
+    where: {
+      fundKind_fundCode: {
+        fundKind: kind,
+        fundCode: normalizedFundCode,
+      },
+    },
+  });
+
+  if (!record) {
+    return createStoredFallbackResult(normalizedFundCode, "本地尚无该基金季报记录。");
+  }
+
+  return toStoredFundQuarterlyResult(record);
 }

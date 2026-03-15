@@ -68,3 +68,20 @@ model ManualSnapshotState {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
+
+model FundQuarterlyTracking {
+  id               Int      @id @default(autoincrement())
+  fundCode         String
+  // 先按页面类型区分场内 / 场外，后续如果开放给不同用户，可继续在这里扩展维度。
+  fundKind         String
+  isActive         Boolean  @default(true)
+  latestPayloadJson String?
+  lastFetchedAt    DateTime?
+  latestReportDate DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([fundKind, fundCode])
+  @@index([fundKind, isActive, updatedAt])
+  @@index([fundKind, latestReportDate])
+}
