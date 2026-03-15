@@ -64,6 +64,7 @@ Index Journal 是一个围绕指数投资、市场观察、AI 协作开发与个
 - TypeScript
 - SQLite
 - Prisma
+- CSRC 季报解析：`pdf-parse@1.1.1`（PDF）+ `mammoth`（Word）
 
 当前数据源：
 
@@ -137,6 +138,7 @@ npm run dev
 - `/forex`：汇率观察
 - `/btc`：BTC 观察
 - `/cn-funds`：国内场内基金（固定基金季报抓取验证）
+- `/otc-funds`：场外基金（固定基金季报多份额净值表现）
 
 当前接口：
 
@@ -147,8 +149,15 @@ npm run dev
 - `GET /api/btc`
 - `GET /api/btc/chart?symbol=BTC/USD&range=1Y`
 - `GET /api/cn-funds/quarterly`
+- `GET /api/otc-funds/quarterly`
 - `GET /api/manual-snapshot/[group]`
 - `POST /api/manual-snapshot/[group]`
+
+季报解析与刷新：
+
+- `/cn-funds` 与 `/otc-funds` 抓取证监会披露季报，提取 “3.2.1 基金份额净值增长率及其与同期业绩比较基准收益率的比较”
+- 支持多份额（A/C/I 等）分表展示
+- 接口默认 30 分钟缓存；可用 `?refresh=1` 强制重新抓取
 
 手动刷新策略：
 

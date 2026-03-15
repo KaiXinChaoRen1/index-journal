@@ -18,6 +18,14 @@ type QuarterlyReportItem = {
   publishDate: string;
   detailUrl: string;
   netValuePerformance: string | null;
+  netValuePerformanceTables: Array<{
+    className: string | null;
+    columns: string[];
+    rows: Array<{
+      stage: string;
+      values: string[];
+    }>;
+  }>;
   netValuePerformanceTable: {
     columns: string[];
     rows: Array<{
@@ -188,6 +196,7 @@ function extractQuarterlyReports(html: string, fundCode: string, fundId: string)
       publishDate: publishDateMatch[0],
       detailUrl: new URL(anchorMatch[1], `${CSRC_ORIGIN}/fund/disclose/`).toString(),
       netValuePerformance: null,
+      netValuePerformanceTables: [],
       netValuePerformanceTable: null,
       netValuePerformanceStatus: "未解析季报正文。",
     });
@@ -273,78 +282,28 @@ function extractNetValuePerformanceText(text: string) {
   if (!text) {
     return {
       text: null,
+      tables: [],
       table: null,
     };
   }
 
-  const startCandidates = [
-    "3.2.1本报告期基金份额净值增长率及其与同期业绩比较基准收益率的比较",
-    "3.2.1 基金份额净值增长率及其与同期业绩比较基准收益率的比较",
-    "3.2.1本报告期基金份额净值增长率及其与同期业绩比较基准收益率比较",
-    "净值增长率及其与同期业绩比较基准收益率的比较",
-  ];
-
-  let start = -1;
-  for (const key of startCandidates) {
-    start = text.indexOf(key);
-    if (start >= 0) {
-      break;
+  const startMatches = [...text.matchAll(/3\.2\.1/g)].map((match) => match.index ?? -1).filter((index) => index >= 0);
+  if (startMatches.length === 0) {
+    const fallbackStart = text.indexOf("净值增长率及其与同期业绩比较基准收益率的比较");
+    if (fallbackStart >= 0) {
+      startMatches.push(fallbackStart);
     }
   }
 
-  if (start < 0) {
+  if (startMatches.length === 0) {
     return {
       text: null,
+      tables: [],
       table: null,
     };
   }
 
-  let end = text.indexOf("3.2.2", start);
-  if (end < 0) {
-    end = text.indexOf("3.3", start);
-  }
-  if (end < 0) {
-    end = text.indexOf("§4", start);
-  }
-  if (end < 0) {
-    end = Math.min(text.length, start + 2200);
-  }
-
-  const section = normalizeDocumentText(text.slice(start, end));
-  if (!section) {
-    return {
-      text: null,
-      table: null,
-    };
-  }
-
-  const lineBreakMarkers = [
-    "阶段",
-    "净值增长率①",
-    "净值增长率标准差②",
-    "业绩比较基准收益率③",
-    "业绩比较基准收益率标准差④",
-    "①-③",
-    "②-④",
-    "过去三个月",
-    "过去六个月",
-    "过去一年",
-    "过去三年",
-    "过去五年",
-    "自基金合同生效起至今",
-  ];
-
-  let formatted = section;
-  for (const marker of lineBreakMarkers) {
-    formatted = formatted.replace(new RegExp(escapeRegex(marker), "g"), `\n${marker}`);
-  }
-  formatted = formatted
-    .replace(/3\.2\.1/g, "\n3.2.1")
-    .replace(/\n+/g, "\n")
-    .trim();
-
-  const outputText = formatted.slice(0, 2600);
-  const compact = outputText.replace(/\s+/g, "");
+  const lineBreakMarkers = ["阶段", "净值增长率①", "净值增长率标准差②", "业绩比较基准收益率③", "业绩比较基准收益率标准差④", "①-③", "②-④", "过去三个月", "过去六个月", "过去一年", "过去三年", "过去五年", "自基金合同生效起至今"];
   const columns = ["净值增长率①", "净值增长率标准差②", "业绩比较基准收益率③", "业绩比较基准收益率标准差④", "①-③", "②-④"];
   const rowDefs: Array<{ label: string; pattern: string }> = [
     { label: "过去三个月", pattern: "(?:过去三个月|过去三月)" },
@@ -354,48 +313,129 @@ function extractNetValuePerformanceText(text: string) {
     { label: "过去五年", pattern: "过去五年" },
     { label: "自基金合同生效起至今", pattern: "自基金合同生效起至今" },
   ];
-  const rowStarts = rowDefs
-    .map((row) => {
-      const match = compact.match(new RegExp(row.pattern));
-      return {
-        ...row,
-        start: match ? match.index ?? -1 : -1,
-        hit: match ? match[0] : null,
-      };
-    })
-    .filter((row) => row.start >= 0)
-    .sort((a, b) => a.start - b.start);
+  const parsedTables: Array<{
+    className: string | null;
+    text: string;
+    columns: string[];
+    rows: Array<{ stage: string; values: string[] }>;
+  }> = [];
   const tokenPattern = /[-+]?\d+(?:\.\d+)?%|-/g;
-  const parsedRows: Array<{ stage: string; values: string[] }> = [];
+  const parseRows = (compactSection: string) => {
+    const rowStarts = rowDefs
+      .map((row) => {
+        const match = compactSection.match(new RegExp(row.pattern));
+        return {
+          ...row,
+          start: match ? match.index ?? -1 : -1,
+          hit: match ? match[0] : null,
+        };
+      })
+      .filter((row) => row.start >= 0)
+      .sort((a, b) => a.start - b.start);
+    const rows: Array<{ stage: string; values: string[] }> = [];
 
-  for (let index = 0; index < rowStarts.length; index += 1) {
-    const current = rowStarts[index];
-    const next = rowStarts[index + 1];
-    const segment = compact.slice(current.start, next ? next.start : compact.length);
-    const segmentWithoutLabel = current.hit ? segment.slice(current.hit.length) : segment;
-    const tokens = segmentWithoutLabel.match(tokenPattern) ?? [];
-    const values = tokens.slice(0, 6);
+    for (let index = 0; index < rowStarts.length; index += 1) {
+      const current = rowStarts[index];
+      const next = rowStarts[index + 1];
+      const segment = compactSection.slice(current.start, next ? next.start : compactSection.length);
+      const segmentWithoutLabel = current.hit ? segment.slice(current.hit.length) : segment;
+      const tokens = segmentWithoutLabel.match(tokenPattern) ?? [];
+      const values = tokens.slice(0, 6);
 
-    if (values.length > 0) {
-      while (values.length < 6) {
-        values.push("-");
+      if (values.length > 0) {
+        while (values.length < 6) {
+          values.push("-");
+        }
+        rows.push({
+          stage: current.label,
+          values,
+        });
       }
-      parsedRows.push({
-        stage: current.label,
-        values,
-      });
+    }
+
+    return rows;
+  };
+
+  for (let i = 0; i < startMatches.length; i += 1) {
+    const start = startMatches[i];
+    const nextStart = startMatches[i + 1] ?? -1;
+    const endCandidates = [text.indexOf("3.2.2", start), text.indexOf("3.3", start), text.indexOf("§4", start), nextStart]
+      .filter((value) => value > start)
+      .sort((a, b) => a - b);
+    const end = endCandidates[0] ?? Math.min(text.length, start + 2200);
+    const section = normalizeDocumentText(text.slice(start, end));
+
+    if (!section) {
+      continue;
+    }
+
+    let formatted = section;
+    for (const marker of lineBreakMarkers) {
+      formatted = formatted.replace(new RegExp(escapeRegex(marker), "g"), `\n${marker}`);
+    }
+    formatted = formatted
+      .replace(/3\.2\.1/g, "\n3.2.1")
+      .replace(/\n+/g, "\n")
+      .trim();
+
+    const outputText = formatted.slice(0, 6000);
+    const compact = formatted.replace(/\s+/g, "");
+    const classMatches = [...compact.matchAll(/([A-Z])(?:类|份额)?[：:]?阶段净值增长率/g)]
+      .map((match) => ({
+        className: `${match[1]}类`,
+        start: match.index ?? -1,
+      }))
+      .filter((match) => match.start >= 0);
+
+    if (classMatches.length >= 2) {
+      for (let classIndex = 0; classIndex < classMatches.length; classIndex += 1) {
+        const currentClass = classMatches[classIndex];
+        const nextClass = classMatches[classIndex + 1];
+        const classSegment = compact.slice(currentClass.start, nextClass ? nextClass.start : compact.length);
+        const rows = parseRows(classSegment);
+
+        if (rows.length > 0) {
+          parsedTables.push({
+            className: currentClass.className,
+            text: outputText,
+            columns,
+            rows,
+          });
+        }
+      }
+    } else {
+      const rows = parseRows(compact);
+      const className = classMatches[0]?.className ?? null;
+      if (rows.length > 0) {
+        parsedTables.push({
+          className,
+          text: outputText,
+          columns,
+          rows,
+        });
+      }
     }
   }
 
+  if (parsedTables.length === 0) {
+    return {
+      text: null,
+      tables: [],
+      table: null,
+    };
+  }
+
   return {
-    text: outputText,
-    table:
-      parsedRows.length > 0
-        ? {
-            columns,
-            rows: parsedRows,
-          }
-        : null,
+    text: parsedTables.map((table) => table.text).join("\n\n"),
+    tables: parsedTables.map((table) => ({
+      className: table.className,
+      columns: table.columns,
+      rows: table.rows,
+    })),
+    table: {
+      columns: parsedTables[0].columns,
+      rows: parsedTables[0].rows,
+    },
   };
 }
 
@@ -406,6 +446,7 @@ async function enrichLatestQuarterlyReportWithNetValue(item: QuarterlyReportItem
     return {
       ...item,
       netValuePerformance: null,
+      netValuePerformanceTables: [],
       netValuePerformanceTable: null,
       netValuePerformanceStatus: parsed.message,
     };
@@ -417,6 +458,7 @@ async function enrichLatestQuarterlyReportWithNetValue(item: QuarterlyReportItem
     return {
       ...item,
       netValuePerformance: null,
+      netValuePerformanceTables: [],
       netValuePerformanceTable: null,
       netValuePerformanceStatus: "已解析季报正文，但未定位到基金净值表现段落。",
     };
@@ -425,6 +467,7 @@ async function enrichLatestQuarterlyReportWithNetValue(item: QuarterlyReportItem
   return {
     ...item,
     netValuePerformance: netValuePerformance.text,
+    netValuePerformanceTables: netValuePerformance.tables,
     netValuePerformanceTable: netValuePerformance.table,
     netValuePerformanceStatus: parsed.message,
   };

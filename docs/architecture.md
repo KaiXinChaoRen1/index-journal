@@ -222,6 +222,22 @@ Index Journal 当前解决的是一个具体而持续的个人需求：
 - 承载低频页面入口
 - 维持轻量导航，不把首页做成复杂后台
 
+### `lib/cn-fund-quarterly.ts`
+
+负责：
+
+- 通过证监会披露平台获取基金详情与最近季报
+- 解析季报正文（PDF/Word），提取“3.2.1 基金份额净值增长率及其与同期业绩比较基准收益率的比较”
+- 将多份额（A/C/I 等）拆分为多张结构化表返回
+- 批量请求默认 30 分钟缓存，支持 `?refresh=1` 强制刷新
+
+### `app/api/cn-funds/quarterly` 与 `app/api/otc-funds/quarterly`
+
+负责：
+
+- 返回固定基金代码的最近季报与结构化净值表现表
+- 透传 `?refresh=1` 强制刷新参数
+
 ### `app/components/manual-refresh-control.tsx`
 
 负责：

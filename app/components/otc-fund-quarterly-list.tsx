@@ -28,13 +28,6 @@ type QuarterlyResult = {
         values: string[];
       }>;
     }>;
-    netValuePerformanceTable: {
-      columns: string[];
-      rows: Array<{
-        stage: string;
-        values: string[];
-      }>;
-    } | null;
     netValuePerformanceStatus: string;
   } | null;
 };
@@ -45,7 +38,7 @@ type QuarterlyApiPayload = {
   data: QuarterlyResult[];
 };
 
-export function CnFundQuarterlyList() {
+export function OtcFundQuarterlyList() {
   const [data, setData] = useState<QuarterlyResult[]>([]);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,7 +48,7 @@ export function CnFundQuarterlyList() {
     async function load() {
       try {
         setIsLoading(true);
-        const response = await fetch("/api/cn-funds/quarterly", {
+        const response = await fetch("/api/otc-funds/quarterly", {
           headers: { accept: "application/json" },
         });
 
@@ -68,7 +61,7 @@ export function CnFundQuarterlyList() {
         setGeneratedAt(payload.generatedAt ?? null);
         setErrorMessage(null);
       } catch {
-        setErrorMessage("获取基金季报数据失败，请稍后重试。");
+        setErrorMessage("获取场外基金季报数据失败，请稍后重试。");
       } finally {
         setIsLoading(false);
       }
@@ -80,7 +73,7 @@ export function CnFundQuarterlyList() {
   if (isLoading) {
     return (
       <section className="empty-state">
-        <h2>正在获取基金季报</h2>
+        <h2>正在获取场外基金季报</h2>
         <p>正在请求证监会披露页面，请稍候。</p>
       </section>
     );
@@ -102,8 +95,8 @@ export function CnFundQuarterlyList() {
           <div className="card-head">
             <div>
               <p className="index-code">{item.fundCode}</p>
-              <h2>{item.fundName ?? "国内场内基金"}</h2>
-              <p className="hero-copy card-copy">固定基金代码验证证监会季报链路，不做交易终端式扩展。</p>
+              <h2>{item.fundName ?? "场外基金"}</h2>
+              <p className="hero-copy card-copy">固定基金代码验证季报多份额（A类/C类等）净值表现结构化提取链路。</p>
             </div>
             <div className="headline-metric">
               <p>{item.status === "success" ? "已获取" : "未获取"}</p>

@@ -32,6 +32,11 @@ const MENU_ITEMS = [
     label: "国内场内基金",
     description: "查看固定基金列表的最近季度报告抓取结果。",
   },
+  {
+    href: "/otc-funds",
+    label: "场外基金",
+    description: "查看场外基金季报中的多份额净值表现表格。",
+  },
 ] as const;
 
 export function SiteMenu() {

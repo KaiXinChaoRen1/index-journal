@@ -126,3 +126,18 @@ npm run db:push
 5. 如涉及定位或结构变化，同步更新文档与 `/log`
 6. 跑 `npm run lint`
 7. 跑 `npm run build`
+
+## 8. 基金季报解析与调试
+
+- 页面与接口：
+  - 页面：`/cn-funds`、`/otc-funds`
+  - 接口：`GET /api/cn-funds/quarterly`、`GET /api/otc-funds/quarterly`
+  - 支持 `?refresh=1` 强制绕过 30 分钟缓存
+- 解析口径：
+  - 自动定位并提取“3.2.1 基金份额净值增长率及其与同期业绩比较基准收益率的比较”
+  - 多份额（A/C/I 等）按份额头部拆分为多张表展示
+  - PDF 使用 `pdf-parse@1.1.1`，Word 使用 `mammoth` 提取正文
+- 常见排错：
+  - 只有一张表：优先尝试 `?refresh=1`，并确认季报文本中份额头存在（如 “A类…阶段净值增长率”）
+  - PDF 解析报 “fake worker” 错误：确保依赖为 `pdf-parse@1.1.1`
+  - 接口无数据：查看返回的 `netValuePerformanceStatus` 文案（例如“报告下载失败/未定位到段落”）
