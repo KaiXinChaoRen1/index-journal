@@ -1,14 +1,38 @@
+# Next.js 构建产物（不提交）
 .next
+
+# 包管理与依赖目录（不提交）
 node_modules
+
+# 环境变量（包含敏感信息，禁止提交）
 .env
 .env.local
+.env.*
+!.env.example
+
+# 本地 SQLite 开发库（个人开发态数据，不提交）
 dev.db
 dev.db-journal
 prisma/dev.db
 prisma/dev.db-journal
+
+# 操作系统/编辑器产生的临时文件（不提交）
 .DS_Store
+.idea/
+.vscode/
+
+# 日志文件（不提交）
 *.log
-#
-# TypeScript incremental build info（自动生成，不应提交）
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript 增量编译信息（自动生成，不应提交）
 *.tsbuildinfo
 tsconfig.tsbuildinfo
+
+# 测试产物（按需生成，不提交）
+coverage/
+
+# 可选导出目录（仅在使用 next export 时生成，不提交）
+out/
