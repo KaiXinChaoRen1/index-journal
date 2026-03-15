@@ -7,6 +7,15 @@ import { prisma } from "@/lib/prisma";
 const TWELVE_DATA_QUOTE_URL = "https://api.twelvedata.com/quote";
 const SNAPSHOT_COOLDOWN_MS = 5 * 60 * 1000;
 
+/**
+ * 手动快照服务层。
+ *
+ * 这层处理的不是长期历史，而是“页面上最近一次主动刷新出来的价格”。
+ * 它回答的是：
+ * - 某个页面组能不能刷新？
+ * - 现在要不要走冷却复用？
+ * - 刷新成功或失败后，SQLite 里该如何记录状态？
+ */
 export const SNAPSHOT_GROUPS = {
   market: {
     groupKey: "market",
@@ -270,7 +279,7 @@ export async function getSnapshotGroupState(groupKey: SnapshotGroupKey) {
 }
 
 export async function refreshSnapshotGroup(groupKey: SnapshotGroupKey): Promise<SnapshotRefreshResult> {
-  const config = SNAPSHOT_GROUPS[groupKey];
+  const groupConfig = SNAPSHOT_GROUPS[groupKey];
   const now = new Date();
   const currentState = await getSnapshotGroupState(groupKey);
   const availability = getSnapshotRefreshAvailability(groupKey, now);
@@ -286,7 +295,7 @@ export async function refreshSnapshotGroup(groupKey: SnapshotGroupKey): Promise<
   }
 
   const cooldownRemainingSeconds = getCooldownRemainingSeconds(currentState.lastSuccessAt, now.getTime());
-  const hasAllSymbols = config.symbols.every((symbol) => currentState.payload[symbol]);
+  const hasAllSymbols = groupConfig.symbols.every((symbol) => currentState.payload[symbol]);
 
   if (cooldownRemainingSeconds > 0 && hasAllSymbols && currentState.lastSuccessAt) {
     return {
@@ -301,7 +310,7 @@ export async function refreshSnapshotGroup(groupKey: SnapshotGroupKey): Promise<
   try {
     // 统一按页面数据组刷新，避免单个按钮触发多次分散请求。
     const entries = await Promise.all(
-      config.symbols.map((symbol) => fetchQuoteSnapshot(symbol, config.sourceLabel)),
+      groupConfig.symbols.map((symbol) => fetchQuoteSnapshot(symbol, groupConfig.sourceLabel)),
     );
     const payload = Object.fromEntries(entries.map((entry) => [entry.symbol, entry])) as SnapshotPayload;
 

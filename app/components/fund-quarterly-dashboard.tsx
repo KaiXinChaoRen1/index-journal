@@ -3,6 +3,9 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 
+// 这个组件是基金季报页的前端壳层：
+// - 首次加载时只读本地 SQLite 已保存结果
+// - 用户提交代码或点击“重新抓取”时，才触发后端抓取和落库
 type QuarterlyResult = {
   fundCode: string;
   fundId: string | null;

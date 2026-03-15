@@ -1,6 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+
+// 这个脚本只负责首页“昨夜收盘快照”口径，不负责长期历史。
+// 如果你想理解 MorningCloseSnapshot 表是怎么来的，从这个文件开始看最直接。
 const API_QUOTE_URL = "https://api.twelvedata.com/quote";
 const BEIJING_OFFSET_HOURS = 8;
 const MORNING_JOB = "MORNING_SNAPSHOT";

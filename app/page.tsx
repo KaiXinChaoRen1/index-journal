@@ -15,8 +15,17 @@ import { getSnapshotGroupState, getSnapshotRefreshAvailability } from "@/lib/man
 
 export const dynamic = "force-dynamic";
 
+// 首页是服务端页面入口。
+// 阅读建议：先看这里用了哪些服务函数，再往 lib/ 里追数据是如何被读取和计算的。
 export default async function HomePage() {
+  // 页面在真正取数前先做一次“启动补偿”，目的是避免当天该有的快照 / EOD
+  // 还没跑到，但用户已经先打开了站点。
   await ensureStartupCompensation();
+
+  // 首页真正依赖的只有三份数据：
+  // 1. 卡片指标
+  // 2. 图表默认点位
+  // 3. 最近一次手动快照状态
   const [cards, defaultCharts, snapshotState] = await Promise.all([
     getMarketCards(),
     getDefaultMarketCharts(),

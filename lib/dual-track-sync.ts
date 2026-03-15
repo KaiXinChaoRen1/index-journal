@@ -14,6 +14,14 @@ const TWELVE_DATA_SERIES_URL = "https://api.twelvedata.com/time_series";
 let compensationLastRunAt = 0;
 let compensationPending: Promise<void> | null = null;
 
+/**
+ * 首页“昨夜收盘快照 / 官方 EOD”双轨口径的服务层。
+ *
+ * 这个文件最重要的不是技术细节，而是产品口径：
+ * - 早晨先给用户一个可快速查看的收盘快照
+ * - 中午后如果正式 EOD 已同步完成，则切回正式日线口径
+ * - 页面启动时可做一次轻量补偿，尽量避免“今天该有的数据还没到”
+ */
 type QuotePayload = {
   status?: string;
   message?: string;
@@ -310,9 +318,9 @@ async function runStartupCompensation(now = new Date()) {
   }
 
   const bizDate = getBeijingDayStartUtc(now);
-  const currentMinutes = getBeijingTimeHM(now);
+  const beijingMinutesNow = getBeijingTimeHM(now);
 
-  if (currentMinutes >= MORNING_CUTOFF_MINUTES) {
+  if (beijingMinutesNow >= MORNING_CUTOFF_MINUTES) {
     const hasMorning = await isCheckpointSuccess(MORNING_SNAPSHOT_JOB, bizDate);
 
     if (!hasMorning) {
@@ -320,7 +328,7 @@ async function runStartupCompensation(now = new Date()) {
     }
   }
 
-  if (currentMinutes >= EOD_CUTOFF_MINUTES) {
+  if (beijingMinutesNow >= EOD_CUTOFF_MINUTES) {
     const hasEod = await isCheckpointSuccess(FORMAL_EOD_JOB, bizDate);
 
     if (!hasEod) {
@@ -382,9 +390,9 @@ export async function getTodayMorningSnapshots(now = new Date()) {
 }
 
 export async function shouldPreferMorningSnapshot(now = new Date()) {
-  const currentMinutes = getBeijingTimeHM(now);
+  const beijingMinutesNow = getBeijingTimeHM(now);
 
-  if (currentMinutes < MORNING_CUTOFF_MINUTES) {
+  if (beijingMinutesNow < MORNING_CUTOFF_MINUTES) {
     return false;
   }
 

@@ -18,6 +18,12 @@ import {
   startOfWeek,
 } from "@/lib/price-analytics";
 
+/**
+ * 汇率观察页服务层。
+ *
+ * 它故意复用 index-data 的图表能力与 price-analytics 的纯计算逻辑，
+ * 这样汇率页和首页就能共享一套“从 SQLite 读日线 -> 本地算指标 -> 页面展示”的模式。
+ */
 export const FOREX_DEFINITIONS = [
   {
     symbol: "USD/CNY",

@@ -8,6 +8,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// 这个 route 是“按钮点击 -> 服务层刷新 -> 返回状态”的桥接层。
+// 真正的业务规则都在 lib/manual-snapshot.ts，这里尽量保持薄。
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ group: string }> },

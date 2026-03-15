@@ -1,3 +1,5 @@
+// 纯计算工具层。
+// 这里尽量不依赖 Prisma / fetch / 页面组件，方便你把“口径”与“IO”分开理解。
 export type PriceRow = {
   date: Date;
   close: number;

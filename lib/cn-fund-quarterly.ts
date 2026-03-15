@@ -10,6 +10,17 @@ const REQUEST_HEADERS = {
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
 };
 
+/**
+ * 基金季报服务层。
+ *
+ * 这一层同时承担三件事：
+ * 1. 向证监会披露平台请求基金详情与季报正文
+ * 2. 解析“3.2.1 基金净值表现”段落
+ * 3. 把最近一次结果保存到 SQLite
+ *
+ * 当前规模下这样集中放置是可维护的，但如果未来基金能力继续变复杂，
+ * 最优先的演化方向就是把“抓取 / 解析 / 存储”拆成独立子模块。
+ */
 export const FUND_QUARTERLY_KIND = {
   cn: "cn",
   otc: "otc",
@@ -746,6 +757,8 @@ export async function saveTrackedFundQuarterly(kind: FundQuarterlyKind, fundCode
     throw new Error("基金代码需为 6 位数字。");
   }
 
+  // 这里的保存策略是“按代码覆盖最近一次结果”，而不是保留完整抓取历史。
+  // 原因：当前页面关注的是低频跟踪和阅读，不是历史审计。
   const result = await fetchFundLatestQuarterly(normalizedFundCode);
   const now = new Date();
   const latestReportDate = result.latestQuarterlyReport?.publishDate

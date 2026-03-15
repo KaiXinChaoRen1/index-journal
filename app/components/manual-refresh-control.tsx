@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
+// 这是“用户点击刷新 -> 调 API -> 刷新服务端页面”的前端入口组件。
 function formatLocalTime(value: string | null) {
   if (!value) {
     return "暂无快照";
@@ -75,6 +76,8 @@ export function ManualRefreshControl({
   async function handleRefresh() {
     startTransition(async () => {
       try {
+        // POST 成功后不手动拼页面状态，而是直接 router.refresh()，
+        // 让服务端页面按既有链路重新取数，这样更容易维持口径一致。
         const response = await fetch(`/api/manual-snapshot/${group}`, {
           method: "POST",
           headers: { accept: "application/json" },

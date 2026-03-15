@@ -31,6 +31,19 @@ import {
   startOfYear,
 } from "@/lib/price-analytics";
 
+/**
+ * 首页 /api/market /api/market/chart 的核心服务层。
+ *
+ * 你可以把这个文件理解成“首页后端服务”：
+ * - 从 SQLite 读取 dailyPrice / morningCloseSnapshot
+ * - 统一计算页面卡片需要的指标
+ * - 统一组织图表数据
+ *
+ * 阅读建议：
+ * 1. 先看 getMarketCards()
+ * 2. 再看 buildMarketCard()
+ * 3. 最后看 getMarketChartData()
+ */
 export const MARKET_DEFINITIONS = [
   {
     marketKey: "SP500",
@@ -47,6 +60,7 @@ export const MARKET_DEFINITIONS = [
 ] as const;
 
 export type MarketKey = (typeof MARKET_DEFINITIONS)[number]["marketKey"];
+type MarketDefinition = (typeof MARKET_DEFINITIONS)[number];
 const MAX_CHART_POINTS = 480;
 
 type DailyPriceRecord = {
@@ -144,10 +158,7 @@ function downsampleChartRows(rows: DailyPriceRecord[]) {
   return { rows: sampled, isSampled: true };
 }
 
-function buildMarketCard(
-  market: (typeof MARKET_DEFINITIONS)[number],
-  rows: DailyPriceRecord[],
-): MarketCard | null {
+function buildMarketCard(market: MarketDefinition, rows: DailyPriceRecord[]): MarketCard | null {
   const latest = rows.at(-1);
   const previous = rows.at(-2);
 
@@ -217,13 +228,14 @@ export async function getMarketCards() {
     shouldPreferMorningSnapshot(),
   ]);
 
-  const normalized = cards.filter((card): card is MarketCard => card !== null);
+  const baseCards = cards.filter((card): card is MarketCard => card !== null);
 
   if (!preferSnapshot) {
-    return normalized;
+    return baseCards;
   }
 
-  return normalized.map((card) => {
+  // 这里只覆盖首页头部“当前价格口径”，不改长期指标。
+  return baseCards.map((card) => {
     const snapshot = snapshots.get(card.symbol);
 
     if (!snapshot) {
@@ -267,14 +279,17 @@ export async function getMarketChartData(
     startDate === null
       ? rows
       : rows.filter((row) => row.date.getTime() >= startDate.getTime());
-  const normalizedRows = range === "MAX" ? downsampleChartRows(filteredRows) : { rows: filteredRows, isSampled: false };
+  const chartRows =
+    range === "MAX"
+      ? downsampleChartRows(filteredRows)
+      : { rows: filteredRows, isSampled: false };
 
   return {
     symbol,
     range,
     latestDate: latest.date.toISOString().slice(0, 10),
-    isSampled: normalizedRows.isSampled,
-    points: normalizedRows.rows.map((row) => ({
+    isSampled: chartRows.isSampled,
+    points: chartRows.rows.map((row) => ({
       date: row.date.toISOString().slice(0, 10),
       close: round(row.close),
     })),
@@ -294,7 +309,9 @@ export async function getDefaultMarketCharts() {
 
 export async function getMarketApiPayload() {
   const cards = await getMarketCards();
-  const payload = Object.fromEntries(
+
+  // API 层只负责把服务层结果序列化成 JSON 友好的格式。
+  const apiPayload = Object.fromEntries(
     cards.map((card) => [
       card.marketKey,
       {
@@ -323,7 +340,7 @@ export async function getMarketApiPayload() {
     ]),
   );
 
-  return payload;
+  return apiPayload;
 }
 
 export function parseChartRange(value: string | null | undefined) {

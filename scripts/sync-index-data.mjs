@@ -2,6 +2,11 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// 这个脚本是“正式日线入库”的离线入口。
+// 阅读建议：
+// 1. 先看 MARKET_DEFINITIONS，理解它会同步哪些 symbol
+// 2. 再看 main() 里如何判断“补历史”还是“增量刷新”
+// 3. 最后看 upsertBars()，确认 SQLite 是如何被写入的
 const API_BASE_URL = "https://api.twelvedata.com/time_series";
 const FULL_HISTORY_START = new Date("1990-01-01T00:00:00Z");
 const CHUNK_YEARS = 10;
@@ -250,6 +255,9 @@ async function main() {
       const { earliestDate, latestDate } = await getHistoryBounds(market.symbol);
       const windows = [];
 
+      // 当前策略是：
+      // - 如果库里没有足够长的历史，就补完整历史窗口
+      // - 否则只刷新最近一小段时间，降低个人项目的同步成本
       if (!earliestDate || !latestDate || earliestDate.getTime() > targetHistoryStart.getTime()) {
         windows.push({
           startDate: targetHistoryStart,

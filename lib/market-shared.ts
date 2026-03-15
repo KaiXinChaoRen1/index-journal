@@ -1,3 +1,5 @@
+// 页面与 API 共享的轻量类型 / 格式化层。
+// 如果你在读代码时看到 formatPercent / ChartRange 这类名字，定义都在这里。
 export const CHART_RANGES = ["1M", "6M", "1Y", "5Y", "MAX"] as const;
 export type ChartRange = (typeof CHART_RANGES)[number];
 const DEFAULT_CHART_RANGE: ChartRange = "1Y";

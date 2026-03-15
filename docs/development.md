@@ -121,11 +121,12 @@ npm run db:push
 
 1. 先读 `AGENTS.md`
 2. 再看 `README.md`
-3. 再看 `docs/architecture.md`
-4. 改代码
-5. 如涉及定位或结构变化，同步更新文档与 `/log`
-6. 跑 `npm run lint`
-7. 跑 `npm run build`
+3. 再看 `docs/reading-guide.md`
+4. 再看 `docs/architecture.md`
+5. 改代码
+6. 如涉及定位或结构变化，同步更新文档与 `/log`
+7. 跑 `npm run lint`
+8. 跑 `npm run build`
 
 ## 8. 基金季报解析与调试
 

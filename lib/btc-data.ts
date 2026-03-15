@@ -17,6 +17,12 @@ import {
   startOfWeek,
 } from "@/lib/price-analytics";
 
+/**
+ * BTC 观察页服务层。
+ *
+ * 这里和首页、汇率页保持一致：统一读本地 dailyPrice，再由服务层计算展示指标。
+ * 这样做的好处是页面之间的数据流非常统一，阅读时不需要切换太多思路。
+ */
 export const BTC_SYMBOL = "BTC/USD" as const;
 const BTC_DEFAULT_CHART_RANGE: ChartRange = "MAX";
 

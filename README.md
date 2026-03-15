@@ -184,6 +184,8 @@ npm run dev
   面向后续接手的 AI agent，也给人类开发者提供更明确的协作口径、开发原则和代码要求。
 - `docs/architecture.md`
   面向技术实现，解释数据链路和模块职责。
+- `docs/reading-guide.md`
+  面向项目维护者的阅读地图，帮助建立入口、服务层、SQLite 和数据流的整体理解。
 - `docs/development.md`
   面向日常开发流程、同步、排错和验证。
 - `docs/data-sources.md`
@@ -211,6 +213,7 @@ npm run dev
 ## 推荐继续阅读
 
 1. [AGENTS.md](./AGENTS.md)
-2. [docs/architecture.md](./docs/architecture.md)
-3. [docs/development.md](./docs/development.md)
-4. [docs/data-sources.md](./docs/data-sources.md)
+2. [docs/reading-guide.md](./docs/reading-guide.md)
+3. [docs/architecture.md](./docs/architecture.md)
+4. [docs/development.md](./docs/development.md)
+5. [docs/data-sources.md](./docs/data-sources.md)
