@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 // 报告条目类型
 type ReportItem = {
@@ -37,11 +37,6 @@ type FundReportsResult = {
   };
 };
 
-type QuarterlyApiPayload = {
-  generatedAt: string;
-  data: FundReportsResult[];
-};
-
 type QuarterlyUpsertPayload = {
   generatedAt: string;
   item: FundReportsResult;
@@ -49,12 +44,11 @@ type QuarterlyUpsertPayload = {
 
 type FundQuarterlyDashboardProps = {
   endpoint: string;
+  initialData: FundReportsResult[];
+  initialGeneratedAt: string | null;
+  initialErrorMessage?: string | null;
   fallbackFundName: string;
-  loadingTitle: string;
-  loadingCopy: string;
-  loadErrorCopy: string;
   panelTitle: string;
-  panelCopy: string;
   emptyTitle: string;
   emptyCopy: string;
   cardCopy: string;
@@ -240,50 +234,22 @@ function FundInfoRow({ label, value }: { label: string; value: React.ReactNode }
 
 export function FundQuarterlyDashboard({
   endpoint,
+  initialData,
+  initialGeneratedAt,
+  initialErrorMessage = null,
   fallbackFundName,
-  loadingTitle,
-  loadingCopy,
-  loadErrorCopy,
   panelTitle,
-  panelCopy,
   emptyTitle,
   emptyCopy,
   cardCopy,
 }: FundQuarterlyDashboardProps) {
-  const [data, setData] = useState<FundReportsResult[]>([]);
-  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [data, setData] = useState<FundReportsResult[]>(() => sortQuarterlyResults(initialData));
+  const [generatedAt, setGeneratedAt] = useState<string | null>(initialGeneratedAt);
   const [fundCodeInput, setFundCodeInput] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshingCode, setRefreshingCode] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(initialErrorMessage);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setIsLoading(true);
-        const response = await fetch(endpoint, {
-          headers: { accept: "application/json" },
-        });
-
-        if (!response.ok) {
-          throw new Error(`请求失败（HTTP ${response.status}）`);
-        }
-
-        const payload = (await response.json()) as QuarterlyApiPayload;
-        setData(sortQuarterlyResults(payload.data ?? []));
-        setGeneratedAt(payload.generatedAt ?? null);
-        setErrorMessage(null);
-      } catch {
-        setErrorMessage(loadErrorCopy);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    void load();
-  }, [endpoint, loadErrorCopy]);
 
   async function saveFundCode(fundCode: string) {
     const response = await fetch(endpoint, {
@@ -350,9 +316,8 @@ export function FundQuarterlyDashboard({
       <section className="refresh-panel fund-tool-panel">
         <div className="refresh-panel-head fund-tool-head">
           <div>
-            <p className="metric-group-title">本地报告跟踪</p>
+            <p className="metric-group-title">基金季报</p>
             <h2 className="fund-tool-title">{panelTitle}</h2>
-            <p className="refresh-note">{panelCopy}</p>
           </div>
 
           <form className="fund-code-form" onSubmit={handleSubmit}>
@@ -382,35 +347,25 @@ export function FundQuarterlyDashboard({
           </form>
         </div>
 
-        <p className="refresh-meta">
-          页面刷新时只读取本地 SQLite 结果。只有你手动新增代码或点击「重新抓取」时，才会重新请求证监会披露平台。
-        </p>
-        {generatedAt ? <p className="refresh-meta">本页读取时间 {formatTimestamp(generatedAt)}</p> : null}
+        {generatedAt ? <p className="refresh-meta">最近读取时间 {formatTimestamp(generatedAt)}</p> : null}
         {actionMessage ? <p className="refresh-status">{actionMessage}</p> : null}
       </section>
 
-      {isLoading ? (
-        <section className="empty-state">
-          <h2>{loadingTitle}</h2>
-          <p>{loadingCopy}</p>
-        </section>
-      ) : null}
-
-      {!isLoading && errorMessage ? (
+      {errorMessage ? (
         <section className="empty-state">
           <h2>数据读取失败</h2>
           <p>{errorMessage}</p>
         </section>
       ) : null}
 
-      {!isLoading && !errorMessage && data.length === 0 ? (
+      {!errorMessage && data.length === 0 ? (
         <section className="empty-state">
           <h2>{emptyTitle}</h2>
           <p>{emptyCopy}</p>
         </section>
       ) : null}
 
-      {!isLoading && !errorMessage && data.length > 0 ? (
+      {!errorMessage && data.length > 0 ? (
         <section className="card-grid forex-core-grid">
           {data.map((item) => {
             const isRefreshing = refreshingCode === item.fundCode;

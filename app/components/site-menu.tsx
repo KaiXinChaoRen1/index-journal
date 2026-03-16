@@ -25,12 +25,12 @@ const MENU_ITEMS = [
   },
   {
     href: "/cn-funds",
-    label: "国内场内基金",
+    label: "场内基金（证券账户）",
     description: "查看固定基金列表的最近季度报告抓取结果。",
   },
   {
     href: "/otc-funds",
-    label: "场外基金",
+    label: "场外基金（支付宝等）",
     description: "查看场外基金季报中的多份额净值表现表格。",
   },
   {
@@ -87,8 +87,6 @@ export function SiteMenu() {
 
       {isOpen ? (
         <nav className="menu-popover" aria-label="页面导航">
-          <p className="menu-title">站点导航</p>
-          <p className="menu-copy">低频但有价值的内容放在这里，首页继续保持清晰和克制。</p>
           <div className="menu-list">
             {MENU_ITEMS.map((item) => {
               const isActive = pathname === item.href;
@@ -100,7 +98,7 @@ export function SiteMenu() {
                   className={isActive ? "menu-link active" : "menu-link"}
                   onClick={() => setIsOpen(false)}
                 >
-                  <span className="menu-link-kicker">{isActive ? "当前页" : "页面入口"}</span>
+                  {isActive ? <span className="menu-link-kicker">当前页</span> : null}
                   <strong>{item.label}</strong>
                   <span>{item.description}</span>
                 </Link>
