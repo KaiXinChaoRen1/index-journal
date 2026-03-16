@@ -129,6 +129,42 @@ npm run dev
 - 本机：`http://localhost:3000`
 - 局域网：`http://你的局域网 IP:3000`
 
+## Docker 部署
+
+如果你要把项目直接跑在一台云服务器上，当前支持最小 Docker 部署。
+
+1. 构建镜像
+
+```bash
+docker build -t index-journal:latest .
+```
+
+2. 启动容器
+
+```bash
+docker run -d \
+  --name index-journal \
+  -p 3000:3000 \
+  -e TWELVE_DATA_API_KEY="你的 Twelve Data API Key" \
+  -e DATABASE_URL="file:/data/dev.db" \
+  -v "$(pwd)/data:/data" \
+  --restart unless-stopped \
+  index-journal:latest
+```
+
+3. 首次同步历史数据
+
+```bash
+docker exec index-journal npm run sync:data
+```
+
+说明：
+
+- 容器启动时会自动执行 `prisma db push`，保证 SQLite schema 已初始化
+- SQLite 数据库放在容器内 `/data/dev.db`，因此要挂载宿主机目录做持久化
+- 如果不提供 `TWELVE_DATA_API_KEY`，页面仍可启动，但同步脚本和手动刷新不会成功
+- 也可以直接使用仓库内的 `./deploy.sh`，它会完成构建和容器启动
+
 ## 当前页面与接口
 
 当前页面：

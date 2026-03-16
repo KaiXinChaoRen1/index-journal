@@ -143,3 +143,34 @@ npm run db:push
   - 只有一张表：重新提交同一个基金代码触发刷新，并确认季报文本中份额头存在（如 “A类基金份额净值增长率”）
   - PDF 解析报 “fake worker” 错误：确保依赖为 `pdf-parse@1.1.1`
   - 接口无数据：查看返回的 `netValuePerformanceStatus` 文案（例如“报告下载失败/未定位到段落”）
+
+## 9. Docker 部署约定
+
+当前 Docker 方案服务的是“单机云服务器可直接运行”的目标，不追求复杂编排。
+
+最小要求：
+
+1. 宿主机安装 Docker
+2. 通过环境变量提供 `TWELVE_DATA_API_KEY`
+3. 将宿主机目录挂载到容器 `/data`，持久化 SQLite 数据库
+
+推荐命令：
+
+```bash
+docker build -t index-journal:latest .
+
+docker run -d \
+  --name index-journal \
+  -p 3000:3000 \
+  -e TWELVE_DATA_API_KEY="你的 API Key" \
+  -e DATABASE_URL="file:/data/dev.db" \
+  -v "$(pwd)/data:/data" \
+  --restart unless-stopped \
+  index-journal:latest
+```
+
+补充说明：
+
+- 容器入口会先执行 `prisma db push`，再启动 `next start`
+- 首次部署后，如果需要补历史数据，手动执行 `docker exec index-journal npm run sync:data`
+- 不建议把服务器 IP、域名或 API Key 写死在部署脚本里
