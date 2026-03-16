@@ -1,6 +1,8 @@
 # AGENTS.md
 
-本文件是 Index Journal 的 Agent 协作说明，也给人类维护者提供一份更偏“接手口径”的项目地图。
+本文件是 Index Journal 的 Agent 协作说明，也给人类维护者提供一份更偏”接手口径”的项目地图。
+
+> **另请阅读 [CLAUDE.md](./CLAUDE.md)** 获取常用命令、项目结构和故障排查等实用信息。
 
 它和 `README.md` 的分工不同：
 
