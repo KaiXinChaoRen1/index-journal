@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getBeijingDayStartUtc, getBeijingTimeHM } from "@/lib/beijing-time";
-import { parseOfficialTime } from "@/lib/live-price-shared";
+import { parseQuoteTime as parseQuoteTimeFromPayload } from "@/lib/live-price-shared";
 
 const MORNING_SNAPSHOT_JOB = "MORNING_SNAPSHOT";
 const FORMAL_EOD_JOB = "FORMAL_EOD";
@@ -32,6 +32,7 @@ type QuotePayload = {
   percent_change?: string;
   datetime?: string;
   timestamp?: number | string;
+  last_quote_at?: number | string;
 };
 
 export type MorningSnapshotView = {
@@ -92,21 +93,7 @@ async function isCheckpointSuccess(jobType: string, bizDate: Date) {
 }
 
 function parseQuoteTime(payload: QuotePayload) {
-  const byDatetime = parseOfficialTime(payload.datetime);
-  const byTimestamp =
-    payload.timestamp === undefined
-      ? null
-      : new Date(Number.parseInt(String(payload.timestamp), 10) * 1000);
-
-  if (byDatetime) {
-    return byDatetime;
-  }
-
-  if (byTimestamp && Number.isFinite(byTimestamp.getTime())) {
-    return byTimestamp;
-  }
-
-  return new Date();
+  return parseQuoteTimeFromPayload(payload) ?? new Date();
 }
 
 async function fetchQuoteSnapshot(symbol: string, apiKey: string) {

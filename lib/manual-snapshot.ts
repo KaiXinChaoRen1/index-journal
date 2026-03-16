@@ -1,7 +1,7 @@
 import { BTC_SYMBOL } from "@/lib/btc-data";
 import { FOREX_DEFINITIONS } from "@/lib/forex-data";
 import { MARKET_DEFINITIONS } from "@/lib/index-data";
-import { formatDateTime, parseOfficialTime } from "@/lib/live-price-shared";
+import { formatDateTime, parseQuoteTime } from "@/lib/live-price-shared";
 import { prisma } from "@/lib/prisma";
 
 const TWELVE_DATA_QUOTE_URL = "https://api.twelvedata.com/quote";
@@ -229,6 +229,7 @@ async function fetchQuoteSnapshot(symbol: string, sourceLabel: string): Promise<
     close?: string;
     datetime?: string;
     timestamp?: number | string;
+    last_quote_at?: number | string;
   };
 
   if (payload.status === "error") {
@@ -241,14 +242,7 @@ async function fetchQuoteSnapshot(symbol: string, sourceLabel: string): Promise<
     throw new Error(`Quote missing close price for ${symbol}.`);
   }
 
-  const parsedDatetime = parseOfficialTime(payload.datetime);
-  const parsedTimestamp =
-    payload.timestamp === undefined
-      ? null
-      : new Date(Number.parseInt(String(payload.timestamp), 10) * 1000);
-  const sourceTime =
-    parsedDatetime ??
-    (parsedTimestamp && Number.isFinite(parsedTimestamp.getTime()) ? parsedTimestamp : new Date());
+  const sourceTime = parseQuoteTime(payload) ?? new Date();
   const fetchedAt = new Date();
 
   return {

@@ -1,6 +1,6 @@
 import {
   formatDateTime,
-  parseOfficialTime,
+  parseQuoteTime,
   type LivePricePayload,
 } from "@/lib/live-price-shared";
 
@@ -87,6 +87,7 @@ async function fetchOfficialLivePriceInner(symbol: string): Promise<LivePricePay
       close?: string;
       datetime?: string;
       timestamp?: number | string;
+      last_quote_at?: number | string;
     };
 
     if (payload.status === "error") {
@@ -107,14 +108,7 @@ async function fetchOfficialLivePriceInner(symbol: string): Promise<LivePricePay
       throw new Error(`Official quote missing close price for ${symbol}.`);
     }
 
-    const byDatetime = parseOfficialTime(payload.datetime);
-    const byTimestamp =
-      payload.timestamp === undefined
-        ? null
-        : new Date(Number.parseInt(String(payload.timestamp), 10) * 1000);
-    const officialTimeDate =
-      byDatetime ??
-      (byTimestamp && Number.isFinite(byTimestamp.getTime()) ? byTimestamp : new Date());
+    const officialTimeDate = parseQuoteTime(payload) ?? new Date();
     const now = new Date();
 
     return {

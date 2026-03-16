@@ -41,6 +41,38 @@ export function parseOfficialTime(value: string | null | undefined) {
   return parsed;
 }
 
+export function parseQuoteTime(payload: {
+  datetime?: string | null;
+  timestamp?: number | string | null;
+  last_quote_at?: number | string | null;
+}) {
+  const byLastQuoteAt =
+    payload.last_quote_at === undefined || payload.last_quote_at === null
+      ? null
+      : new Date(Number.parseInt(String(payload.last_quote_at), 10) * 1000);
+
+  if (byLastQuoteAt && Number.isFinite(byLastQuoteAt.getTime())) {
+    return byLastQuoteAt;
+  }
+
+  const byDatetime = parseOfficialTime(payload.datetime);
+
+  if (byDatetime) {
+    return byDatetime;
+  }
+
+  const byTimestamp =
+    payload.timestamp === undefined || payload.timestamp === null
+      ? null
+      : new Date(Number.parseInt(String(payload.timestamp), 10) * 1000);
+
+  if (byTimestamp && Number.isFinite(byTimestamp.getTime())) {
+    return byTimestamp;
+  }
+
+  return null;
+}
+
 export function getLivePricePollMs() {
   return 60_000;
 }

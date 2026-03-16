@@ -4,6 +4,7 @@ import {
   formatDateTime,
   getLivePricePollMs,
   parseOfficialTime,
+  parseQuoteTime,
 } from "./live-price-shared";
 
 describe("live-price-shared", () => {
@@ -31,5 +32,24 @@ describe("live-price-shared", () => {
         sourceLabel: "Twelve Data Official API",
       }),
     ).toBe("官方实时价格 · 2026-03-14 12:34:56 · Twelve Data Official API");
+  });
+
+  it("prefers last_quote_at over daily datetime fields", () => {
+    const value = parseQuoteTime({
+      datetime: "2026-03-16",
+      timestamp: 1773604800,
+      last_quote_at: 1773650820,
+    });
+
+    expect(value?.toISOString()).toBe("2026-03-16T08:47:00.000Z");
+  });
+
+  it("falls back to datetime when last_quote_at is missing", () => {
+    const value = parseQuoteTime({
+      datetime: "2026-03-16 09:31:00",
+      timestamp: 1773604800,
+    });
+
+    expect(value?.toISOString()).toBe("2026-03-16T09:31:00.000Z");
   });
 });
