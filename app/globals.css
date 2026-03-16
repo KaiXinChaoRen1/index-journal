@@ -782,6 +782,158 @@ a {
   }
 }
 
+/* 报告分类区域 */
+.report-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.report-section:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.report-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.report-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(58, 46, 32, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 250, 242, 0.75);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease;
+}
+
+.report-section-toggle:hover {
+  background: rgba(255, 250, 242, 0.95);
+  border-color: rgba(58, 46, 32, 0.24);
+}
+
+.report-section-icon {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.report-section-title {
+  font-weight: 600;
+}
+
+.report-section-link {
+  color: var(--muted);
+  font-size: 0.86rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.report-section-link:hover {
+  color: var(--text);
+}
+
+/* 报告列表 */
+.report-list {
+  margin-top: 0.75rem;
+}
+
+.report-list-empty {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+  background: rgba(255, 250, 242, 0.5);
+  border-radius: 10px;
+}
+
+/* 单份报告卡片 */
+.report-card {
+  margin: 0.5rem 0;
+  padding: 0.875rem;
+  background: rgba(255, 250, 242, 0.6);
+  border: 1px solid rgba(58, 46, 32, 0.08);
+  border-radius: 12px;
+}
+
+.report-card:last-child {
+  margin-bottom: 0;
+}
+
+.report-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.report-title {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.report-title:hover {
+  color: var(--positive);
+}
+
+.report-date {
+  color: var(--muted);
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.report-toggle-btn {
+  padding: 4px 10px;
+  border: 1px solid rgba(58, 46, 32, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 250, 242, 0.85);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
+}
+
+.report-toggle-btn:hover {
+  background: rgba(255, 250, 242, 1);
+  border-color: rgba(58, 46, 32, 0.2);
+  color: var(--text);
+}
+
+/* 报告业绩数据区域 */
+.report-performance {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed rgba(58, 46, 32, 0.1);
+}
+
+.report-performance-empty {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  text-align: center;
+}
+
 @media (max-width: 900px) {
   .card-grid,
   .log-grid,

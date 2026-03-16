@@ -3,10 +3,21 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 
-// 这个组件是基金季报页的前端壳层：
-// - 首次加载时只读本地 SQLite 已保存结果
-// - 用户提交代码或点击“重新抓取”时，才触发后端抓取和落库
-type QuarterlyResult = {
+// 报告条目类型
+type ReportItem = {
+  title: string;
+  publishDate: string;
+  detailUrl: string;
+  netValuePerformanceTables: Array<{
+    className: string | null;
+    columns: string[];
+    rows: Array<{ stage: string; values: string[] }>;
+  }>;
+  netValuePerformanceStatus: string;
+};
+
+// 基金报告结果类型（新结构）
+type FundReportsResult = {
   fundCode: string;
   fundId: string | null;
   fundName: string | null;
@@ -20,40 +31,20 @@ type QuarterlyResult = {
   lastFetchedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  latestQuarterlyReport: {
-    fundCode: string;
-    fundId: string;
-    title: string;
-    publishDate: string;
-    detailUrl: string;
-    netValuePerformance: string | null;
-    netValuePerformanceTables: Array<{
-      className: string | null;
-      columns: string[];
-      rows: Array<{
-        stage: string;
-        values: string[];
-      }>;
-    }>;
-    netValuePerformanceTable: {
-      columns: string[];
-      rows: Array<{
-        stage: string;
-        values: string[];
-      }>;
-    } | null;
-    netValuePerformanceStatus: string;
-  } | null;
+  reports: {
+    quarterly: ReportItem[];
+    annual: ReportItem[];
+  };
 };
 
 type QuarterlyApiPayload = {
   generatedAt: string;
-  data: QuarterlyResult[];
+  data: FundReportsResult[];
 };
 
 type QuarterlyUpsertPayload = {
   generatedAt: string;
-  item: QuarterlyResult;
+  item: FundReportsResult;
 };
 
 type FundQuarterlyDashboardProps = {
@@ -69,6 +60,12 @@ type FundQuarterlyDashboardProps = {
   cardCopy: string;
 };
 
+// 构建证监会基金详情页链接
+function buildCsrcFundUrl(fundId: string | null) {
+  if (!fundId) return "http://eid.csrc.gov.cn/fund/disclose/index.html";
+  return `http://eid.csrc.gov.cn/fund/disclose/fund_detail.do?fundId=${fundId}`;
+}
+
 function formatTimestamp(value: string | null) {
   if (!value) {
     return "尚未抓取";
@@ -77,7 +74,7 @@ function formatTimestamp(value: string | null) {
   return value.slice(0, 19).replace("T", " ");
 }
 
-function sortQuarterlyResults(items: QuarterlyResult[]) {
+function sortQuarterlyResults(items: FundReportsResult[]) {
   return [...items].sort((left, right) => {
     const leftTime = left.lastFetchedAt ?? left.updatedAt;
     const rightTime = right.lastFetchedAt ?? right.updatedAt;
@@ -86,7 +83,7 @@ function sortQuarterlyResults(items: QuarterlyResult[]) {
   });
 }
 
-function upsertQuarterlyResult(items: QuarterlyResult[], incoming: QuarterlyResult) {
+function upsertQuarterlyResult(items: FundReportsResult[], incoming: FundReportsResult) {
   const next = items.filter((item) => item.fundCode !== incoming.fundCode);
   next.unshift(incoming);
   return sortQuarterlyResults(next);
@@ -105,6 +102,142 @@ function isValidFundCode(value: string) {
   return /^\d{6}$/.test(value.trim());
 }
 
+// 单份业绩数据表格组件
+function PerformanceTable({
+  table,
+  tableIndex,
+}: {
+  table: ReportItem["netValuePerformanceTables"][0];
+  tableIndex: number;
+}) {
+  return (
+    <div className="performance-table-block">
+      <p className="performance-table-subtitle">{table.className ?? `份额组 ${tableIndex + 1}`}</p>
+      <div className="performance-table-scroll">
+        <table className="performance-table">
+          <thead>
+            <tr>
+              <th>阶段</th>
+              {table.columns.map((column) => (
+                <th key={column}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {table.rows.map((row) => (
+              <tr key={`${tableIndex}-${row.stage}`}>
+                <td>{row.stage}</td>
+                {row.values.map((value, index) => (
+                  <td key={`${tableIndex}-${row.stage}-${index}`}>{value}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// 单份报告卡片组件
+function ReportCard({ report, fundCode }: { report: ReportItem; fundCode: string }) {
+  const [showPerformance, setShowPerformance] = useState(false);
+
+  return (
+    <div className="report-card">
+      <div className="report-card-header">
+        <a href={report.detailUrl} target="_blank" rel="noreferrer" className="report-title">
+          {report.title}
+        </a>
+        <span className="report-date">{report.publishDate}</span>
+      </div>
+
+      <button
+        type="button"
+        className="report-toggle-btn"
+        onClick={() => setShowPerformance(!showPerformance)}
+      >
+        {showPerformance ? "▼ 隐藏业绩数据" : "▶ 查看业绩数据"}
+      </button>
+
+      {showPerformance && (
+        <div className="report-performance">
+          {report.netValuePerformanceTables.length > 0 ? (
+            <div className="performance-table-wrap">
+              <p className="performance-table-title">基金净值表现 3.2.1（结构化表格）</p>
+              {report.netValuePerformanceTables.map((table, idx) => (
+                <PerformanceTable key={`${fundCode}-${idx}`} table={table} tableIndex={idx} />
+              ))}
+            </div>
+          ) : (
+            <div className="report-performance-empty">{report.netValuePerformanceStatus}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 报告分类折叠区域组件
+function ReportSection({
+  title,
+  reports,
+  sourceUrl,
+}: {
+  title: string;
+  reports: ReportItem[];
+  sourceUrl: string;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="report-section">
+      <div className="report-section-header">
+        <button
+          type="button"
+          className="report-section-toggle"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <span className="report-section-icon">{isExpanded ? "▼" : "▶"}</span>
+          <span className="report-section-title">
+            {title} ({reports.length})
+          </span>
+        </button>
+        <a
+          href={sourceUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="report-section-link"
+        >
+          查看官方数据源
+        </a>
+      </div>
+
+      {isExpanded && (
+        <div className="report-list">
+          {reports.length === 0 ? (
+            <div className="report-list-empty">暂无{title}数据</div>
+          ) : (
+            reports.map((report, index) => (
+              <ReportCard key={`${report.title}-${index}`} report={report} fundCode="" />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 基金信息行组件
+function FundInfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="metric-row">
+      <span>{label}</span>
+      <strong>{value ?? "暂无数据"}</strong>
+    </div>
+  );
+}
+
 export function FundQuarterlyDashboard({
   endpoint,
   fallbackFundName,
@@ -117,7 +250,7 @@ export function FundQuarterlyDashboard({
   emptyCopy,
   cardCopy,
 }: FundQuarterlyDashboardProps) {
-  const [data, setData] = useState<QuarterlyResult[]>([]);
+  const [data, setData] = useState<FundReportsResult[]>([]);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [fundCodeInput, setFundCodeInput] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -165,7 +298,7 @@ export function FundQuarterlyDashboard({
     const payload = (await response.json()) as QuarterlyUpsertPayload | { message?: string };
 
     if (!response.ok) {
-      throw new Error(getApiErrorMessage(payload, "抓取基金季报失败，请稍后重试。"));
+      throw new Error(getApiErrorMessage(payload, "抓取基金报告失败，请稍后重试。"));
     }
 
     const successPayload = payload as QuarterlyUpsertPayload;
@@ -190,9 +323,9 @@ export function FundQuarterlyDashboard({
       const item = await saveFundCode(normalizedFundCode);
       setFundCodeInput("");
       setErrorMessage(null);
-      setActionMessage(item.status === "success" ? `已抓取并保存 ${item.fundCode}。` : `${item.fundCode} 已保存，但抓取失败。`);
+      setActionMessage(`已抓取并保存 ${item.fundCode}。`);
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "抓取基金季报失败，请稍后重试。");
+      setActionMessage(error instanceof Error ? error.message : "抓取基金报告失败，请稍后重试。");
     } finally {
       setIsSubmitting(false);
     }
@@ -204,9 +337,9 @@ export function FundQuarterlyDashboard({
       setActionMessage(null);
       const item = await saveFundCode(fundCode);
       setErrorMessage(null);
-      setActionMessage(item.status === "success" ? `已重新抓取 ${item.fundCode}。` : `${item.fundCode} 已刷新，但抓取失败。`);
+      setActionMessage(`已重新抓取 ${item.fundCode}。`);
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "抓取基金季报失败，请稍后重试。");
+      setActionMessage(error instanceof Error ? error.message : "抓取基金报告失败，请稍后重试。");
     } finally {
       setRefreshingCode(null);
     }
@@ -217,7 +350,7 @@ export function FundQuarterlyDashboard({
       <section className="refresh-panel fund-tool-panel">
         <div className="refresh-panel-head fund-tool-head">
           <div>
-            <p className="metric-group-title">本地季报跟踪</p>
+            <p className="metric-group-title">本地报告跟踪</p>
             <h2 className="fund-tool-title">{panelTitle}</h2>
             <p className="refresh-note">{panelCopy}</p>
           </div>
@@ -250,7 +383,7 @@ export function FundQuarterlyDashboard({
         </div>
 
         <p className="refresh-meta">
-          页面刷新时只读取本地 SQLite 结果。只有你手动新增代码或点击“重新抓取”时，才会重新请求证监会披露平台。
+          页面刷新时只读取本地 SQLite 结果。只有你手动新增代码或点击「重新抓取」时，才会重新请求证监会披露平台。
         </p>
         {generatedAt ? <p className="refresh-meta">本页读取时间 {formatTimestamp(generatedAt)}</p> : null}
         {actionMessage ? <p className="refresh-status">{actionMessage}</p> : null}
@@ -281,6 +414,7 @@ export function FundQuarterlyDashboard({
         <section className="card-grid forex-core-grid">
           {data.map((item) => {
             const isRefreshing = refreshingCode === item.fundCode;
+            const sourceUrl = buildCsrcFundUrl(item.fundId);
 
             return (
               <article key={item.fundCode} className="index-card forex-core-card">
@@ -291,7 +425,7 @@ export function FundQuarterlyDashboard({
                     <p className="hero-copy card-copy">{cardCopy}</p>
                   </div>
                   <div className="headline-metric fund-card-headline">
-                    <p>{item.status === "success" ? "已保存" : "抓取失败"}</p>
+                    <p>已保存</p>
                     <span>{item.message}</span>
                     <button
                       type="button"
@@ -306,106 +440,25 @@ export function FundQuarterlyDashboard({
 
                 <div className="metric-table">
                   <div className="metric-group">
-                    <p className="metric-group-title">最近季度报告</p>
-                    <div className="metric-row">
-                      <span>基金代码</span>
-                      <strong>{item.fundCode}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>基金名称</span>
-                      <strong>{item.fundName ?? "暂无数据"}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>fundId</span>
-                      <strong>{item.fundId ?? "未解析到 fundId"}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>基金运作方式</span>
-                      <strong>{item.fundOperationMode ?? "暂无数据"}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>基金类别</span>
-                      <strong>{item.fundCategory ?? "暂无数据"}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>基金管理人</span>
-                      <strong>{item.fundManager ?? "暂无数据"}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>基金托管人</span>
-                      <strong>{item.fundCustodian ?? "暂无数据"}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>基金合同生效日期</span>
-                      <strong>{item.fundContractEffectiveDate ?? "暂无数据"}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>本地抓取时间</span>
-                      <strong>{formatTimestamp(item.lastFetchedAt)}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>季报标题</span>
-                      <strong>{item.latestQuarterlyReport?.title ?? "未获取到最近季度报告"}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>披露日期</span>
-                      <strong>{item.latestQuarterlyReport?.publishDate ?? "暂无数据"}</strong>
-                    </div>
-                    <div className="metric-row">
-                      <span>查看原文</span>
-                      <strong>
-                        {item.latestQuarterlyReport?.detailUrl ? (
-                          <a href={item.latestQuarterlyReport.detailUrl} target="_blank" rel="noreferrer">
-                            打开季报
-                          </a>
-                        ) : (
-                          "暂无链接"
-                        )}
-                      </strong>
-                    </div>
-                    {item.latestQuarterlyReport?.netValuePerformanceTables &&
-                    item.latestQuarterlyReport.netValuePerformanceTables.length > 0 ? (
-                      <div className="performance-table-wrap">
-                        <p className="performance-table-title">基金净值表现 3.2.1（结构化表格）</p>
-                        {item.latestQuarterlyReport.netValuePerformanceTables.map((table, tableIndex) => (
-                          <div key={`${item.fundCode}-perf-${tableIndex}`} className="performance-table-block">
-                            <p className="performance-table-subtitle">{table.className ?? `份额组 ${tableIndex + 1}`}</p>
-                            <div className="performance-table-scroll">
-                              <table className="performance-table">
-                                <thead>
-                                  <tr>
-                                    <th>阶段</th>
-                                    {table.columns.map((column) => (
-                                      <th key={column}>{column}</th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {table.rows.map((row) => (
-                                    <tr key={`${tableIndex}-${row.stage}`}>
-                                      <td>{row.stage}</td>
-                                      {row.values.map((value, index) => (
-                                        <td key={`${tableIndex}-${row.stage}-${index}`}>{value}</td>
-                                      ))}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="metric-row">
-                        <span>基金净值表现 3.2.1（结构化表格）</span>
-                        <strong>{item.latestQuarterlyReport?.netValuePerformance ?? "未提取到净值表现"}</strong>
-                      </div>
-                    )}
-                    <div className="metric-row">
-                      <span>净值表现解析状态</span>
-                      <strong>{item.latestQuarterlyReport?.netValuePerformanceStatus ?? "暂无报告可解析"}</strong>
-                    </div>
+                    <p className="metric-group-title">基金基本信息</p>
+                    <FundInfoRow label="基金代码" value={item.fundCode} />
+                    <FundInfoRow label="基金名称" value={item.fundName} />
+                    <FundInfoRow label="本地抓取时间" value={formatTimestamp(item.lastFetchedAt)} />
                   </div>
+
+                  {/* 季报区域 */}
+                  <ReportSection
+                    title="季报"
+                    reports={item.reports.quarterly}
+                    sourceUrl={sourceUrl}
+                  />
+
+                  {/* 年报区域 */}
+                  <ReportSection
+                    title="年报"
+                    reports={item.reports.annual}
+                    sourceUrl={sourceUrl}
+                  />
                 </div>
 
                 <div className="card-footer">

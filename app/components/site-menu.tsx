@@ -5,17 +5,13 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 // 导航刻意保持稀疏。低频但重要的页面以后可以继续加在这里，
-// 但首页不应该因为“预留”而变成一排空壳入口。
+// 但首页不应该因为"预留"而变成一排空壳入口。
+// 彩蛋永远放在最后一个。
 const MENU_ITEMS = [
   {
     href: "/",
     label: "首页",
     description: "查看两个核心市场的盘后表现。",
-  },
-  {
-    href: "/log",
-    label: "开发日志",
-    description: "查看产品迭代脉络与设计决策。",
   },
   {
     href: "/forex",
@@ -36,6 +32,11 @@ const MENU_ITEMS = [
     href: "/otc-funds",
     label: "场外基金",
     description: "查看场外基金季报中的多份额净值表现表格。",
+  },
+  {
+    href: "/log",
+    label: "彩蛋",
+    description: "查看产品迭代脉络与设计决策。",
   },
 ] as const;
 

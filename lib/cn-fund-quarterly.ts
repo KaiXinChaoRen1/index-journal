@@ -15,11 +15,11 @@ const REQUEST_HEADERS = {
  *
  * 这一层同时承担三件事：
  * 1. 向证监会披露平台请求基金详情与季报正文
- * 2. 解析“3.2.1 基金净值表现”段落
+ * 2. 解析"3.2.1 基金净值表现"段落
  * 3. 把最近一次结果保存到 SQLite
  *
  * 当前规模下这样集中放置是可维护的，但如果未来基金能力继续变复杂，
- * 最优先的演化方向就是把“抓取 / 解析 / 存储”拆成独立子模块。
+ * 最优先的演化方向就是把"抓取 / 解析 / 存储"拆成独立子模块。
  */
 export const FUND_QUARTERLY_KIND = {
   cn: "cn",
@@ -27,6 +27,9 @@ export const FUND_QUARTERLY_KIND = {
 } as const;
 
 export type FundQuarterlyKind = (typeof FUND_QUARTERLY_KIND)[keyof typeof FUND_QUARTERLY_KIND];
+
+// 报告类型枚举
+export type ReportType = 'quarterly' | 'annual';
 
 type NetValuePerformanceRow = {
   stage: string;
@@ -39,7 +42,8 @@ type NetValuePerformanceTable = {
   rows: NetValuePerformanceRow[];
 };
 
-export type QuarterlyReportItem = {
+// 单份报告结构
+export type FundReportItem = {
   fundCode: string;
   fundId: string;
   title: string;
@@ -54,7 +58,8 @@ export type QuarterlyReportItem = {
   netValuePerformanceStatus: string;
 };
 
-export type FundQuarterlyResult = {
+// 基金完整报告结果（新结构：同时包含季报和年报）
+export type FundReportsResult = {
   fundCode: string;
   fundId: string | null;
   fundName: string | null;
@@ -65,10 +70,18 @@ export type FundQuarterlyResult = {
   fundContractEffectiveDate: string | null;
   status: "success" | "failed";
   message: string;
-  latestQuarterlyReport: QuarterlyReportItem | null;
+  // 替换原来的 latestQuarterlyReport: 单报告
+  reports: {
+    quarterly: FundReportItem[];  // 最近最多2份季报
+    annual: FundReportItem[];     // 最近最多2份年报
+  };
 };
 
-export type StoredFundQuarterlyResult = FundQuarterlyResult & {
+// 为了保持向后兼容，保留旧类型别名
+export type QuarterlyReportItem = FundReportItem;
+export type FundQuarterlyResult = FundReportsResult;
+
+export type StoredFundQuarterlyResult = FundReportsResult & {
   lastFetchedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -117,7 +130,7 @@ export function isValidFundCode(value: string) {
   return /^\d{6}$/.test(normalizeFundCodeInput(value));
 }
 
-function buildFailedResult(fundCode: string, message: string): FundQuarterlyResult {
+function buildFailedResult(fundCode: string, message: string): FundReportsResult {
   return {
     fundCode,
     fundId: null,
@@ -129,20 +142,43 @@ function buildFailedResult(fundCode: string, message: string): FundQuarterlyResu
     fundContractEffectiveDate: null,
     status: "failed",
     message,
-    latestQuarterlyReport: null,
+    reports: {
+      quarterly: [],
+      annual: [],
+    },
   };
 }
 
+/**
+ * 分类报告类型：季报、年报或其他
+ * 替代原来的 isQuarterReport() 函数
+ */
+function classifyReportType(title: string): 'quarterly' | 'annual' | 'other' {
+  // 季度报告判断
+  if (title.includes('季度报告')) {
+    return 'quarterly';
+  }
+  if (/第[一二三四1-4]季度报告/.test(title)) {
+    return 'quarterly';
+  }
+  if (/[1-4]季度报告/.test(title)) {
+    return 'quarterly';
+  }
+
+  // 年度报告/半年度报告判断
+  if (title.includes('年度报告') || title.includes('半年度报告')) {
+    return 'annual';
+  }
+
+  return 'other';
+}
+
+/**
+ * 保留向后兼容的 isQuarterReport 函数
+ * @deprecated 使用 classifyReportType 替代
+ */
 export function isQuarterReport(title: string) {
-  if (title.includes("年度报告") || title.includes("半年度报告")) {
-    return false;
-  }
-
-  if (title.includes("季度报告")) {
-    return true;
-  }
-
-  return /第[一二三四1-4]季度报告/.test(title) || /[1-4]季度报告/.test(title);
+  return classifyReportType(title) === 'quarterly';
 }
 
 function extractFundName(html: string) {
@@ -203,9 +239,16 @@ function extractFundOverview(html: string, fallbackFundCode: string) {
   };
 }
 
-function extractQuarterlyReports(html: string, fundCode: string, fundId: string) {
+/**
+ * 提取所有报告并按类型分类
+ * 替代原来的 extractQuarterlyReports 函数
+ */
+function extractReports(html: string, fundCode: string, fundId: string): {
+  quarterly: FundReportItem[];
+  annual: FundReportItem[];
+} {
   const rows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
-  const reports: QuarterlyReportItem[] = [];
+  const allReports: FundReportItem[] = [];
 
   for (const row of rows) {
     const rowHtml = row[1];
@@ -218,8 +261,10 @@ function extractQuarterlyReports(html: string, fundCode: string, fundId: string)
     }
 
     const title = normalizeText(anchorMatch[2]);
+    const reportType = classifyReportType(title);
 
-    if (!isQuarterReport(title)) {
+    // 只保留季报和年报
+    if (reportType === 'other') {
       continue;
     }
 
@@ -228,7 +273,7 @@ function extractQuarterlyReports(html: string, fundCode: string, fundId: string)
       continue;
     }
 
-    reports.push({
+    allReports.push({
       fundCode,
       fundId,
       title,
@@ -237,11 +282,34 @@ function extractQuarterlyReports(html: string, fundCode: string, fundId: string)
       netValuePerformance: null,
       netValuePerformanceTables: [],
       netValuePerformanceTable: null,
-      netValuePerformanceStatus: "未解析季报正文。",
+      netValuePerformanceStatus: "未解析报告正文。",
     });
   }
 
-  return reports.sort((left, right) => right.publishDate.localeCompare(left.publishDate));
+  // 按发布日期降序排序
+  const sortedReports = allReports.sort((left, right) =>
+    right.publishDate.localeCompare(left.publishDate)
+  );
+
+  // 分类并取前2份
+  const quarterly = sortedReports
+    .filter(r => classifyReportType(r.title) === 'quarterly')
+    .slice(0, 2);
+
+  const annual = sortedReports
+    .filter(r => classifyReportType(r.title) === 'annual')
+    .slice(0, 2);
+
+  return { quarterly, annual };
+}
+
+/**
+ * 保留向后兼容的 extractQuarterlyReports 函数
+ * @deprecated 使用 extractReports 替代
+ */
+function extractQuarterlyReports(html: string, fundCode: string, fundId: string): FundReportItem[] {
+  const { quarterly } = extractReports(html, fundCode, fundId);
+  return quarterly;
 }
 
 function isLikelyBlockedPage(html: string) {
@@ -293,7 +361,7 @@ async function parseReportText(detailUrl: string) {
       const parsed = await pdfParse(buffer);
       return {
         text: normalizeDocumentText(parsed.text),
-        message: "已解析 PDF 季报正文。",
+        message: "已解析 PDF 报告正文。",
       };
     }
 
@@ -301,7 +369,7 @@ async function parseReportText(detailUrl: string) {
       const parsed = await mammoth.extractRawText({ buffer });
       return {
         text: normalizeDocumentText(parsed.value ?? ""),
-        message: "已解析 Word 季报正文。",
+        message: "已解析 Word 报告正文。",
       };
     }
 
@@ -312,7 +380,7 @@ async function parseReportText(detailUrl: string) {
   } catch (error) {
     return {
       text: null,
-      message: `季报正文解析失败：${error instanceof Error ? error.message : "未知错误"}`,
+      message: `报告正文解析失败：${error instanceof Error ? error.message : "未知错误"}`,
     };
   }
 }
@@ -513,7 +581,10 @@ function extractNetValuePerformanceText(text: string) {
   };
 }
 
-async function enrichLatestQuarterlyReportWithNetValue(item: QuarterlyReportItem) {
+/**
+ * 单份报告解析
+ */
+async function enrichReportWithNetValue(item: FundReportItem): Promise<FundReportItem> {
   const parsed = await parseReportText(item.detailUrl);
 
   if (!parsed.text) {
@@ -534,7 +605,7 @@ async function enrichLatestQuarterlyReportWithNetValue(item: QuarterlyReportItem
       netValuePerformance: null,
       netValuePerformanceTables: [],
       netValuePerformanceTable: null,
-      netValuePerformanceStatus: "已解析季报正文，但未定位到基金净值表现段落。",
+      netValuePerformanceStatus: "已解析报告正文，但未定位到基金净值表现段落。",
     };
   }
 
@@ -545,6 +616,32 @@ async function enrichLatestQuarterlyReportWithNetValue(item: QuarterlyReportItem
     netValuePerformanceTable: netValuePerformance.table,
     netValuePerformanceStatus: parsed.message,
   };
+}
+
+/**
+ * 批量解析多份报告
+ */
+async function enrichReportsWithNetValue(reports: FundReportItem[]): Promise<FundReportItem[]> {
+  if (reports.length === 0) {
+    return [];
+  }
+
+  // 串行解析以避免对证监会服务器造成过大压力
+  const enrichedReports: FundReportItem[] = [];
+  for (const report of reports) {
+    const enriched = await enrichReportWithNetValue(report);
+    enrichedReports.push(enriched);
+  }
+
+  return enrichedReports;
+}
+
+/**
+ * 保留向后兼容的 enrichLatestQuarterlyReportWithNetValue 函数
+ * @deprecated 使用 enrichReportWithNetValue 替代
+ */
+async function enrichLatestQuarterlyReportWithNetValue(item: FundReportItem): Promise<FundReportItem> {
+  return enrichReportWithNetValue(item);
 }
 
 export async function getFundIdByCode(fundCode: string): Promise<FundIdLookupResult> {
@@ -619,7 +716,10 @@ async function fetchFundDetailById(fundId: string) {
   }
 }
 
-export async function fetchFundLatestQuarterly(fundCode: string): Promise<FundQuarterlyResult> {
+/**
+ * 获取基金报告（新函数，同时获取季报和年报）
+ */
+export async function fetchFundReports(fundCode: string): Promise<FundReportsResult> {
   const normalizedFundCode = normalizeFundCodeInput(fundCode);
 
   if (!isValidFundCode(normalizedFundCode)) {
@@ -651,9 +751,10 @@ export async function fetchFundLatestQuarterly(fundCode: string): Promise<FundQu
 
   const overview = extractFundOverview(html, normalizedFundCode);
   const resolvedFundCode = overview.fundCode;
-  const reports = extractQuarterlyReports(html, resolvedFundCode, fundId);
+  const { quarterly, annual } = extractReports(html, resolvedFundCode, fundId);
 
-  if (reports.length === 0) {
+  // 如果没有获取到任何报告
+  if (quarterly.length === 0 && annual.length === 0) {
     return {
       fundCode: resolvedFundCode,
       fundId,
@@ -664,10 +765,19 @@ export async function fetchFundLatestQuarterly(fundCode: string): Promise<FundQu
       fundCustodian: overview.fundCustodian,
       fundContractEffectiveDate: overview.fundContractEffectiveDate,
       status: "failed",
-      message: "未获取到最近季度报告。",
-      latestQuarterlyReport: null,
+      message: "未获取到季报或年报。",
+      reports: {
+        quarterly: [],
+        annual: [],
+      },
     };
   }
+
+  // 并行解析季报和年报
+  const [enrichedQuarterly, enrichedAnnual] = await Promise.all([
+    enrichReportsWithNetValue(quarterly),
+    enrichReportsWithNetValue(annual),
+  ]);
 
   return {
     fundCode: resolvedFundCode,
@@ -679,9 +789,20 @@ export async function fetchFundLatestQuarterly(fundCode: string): Promise<FundQu
     fundCustodian: overview.fundCustodian,
     fundContractEffectiveDate: overview.fundContractEffectiveDate,
     status: "success",
-    message: "已获取最近季度报告。",
-    latestQuarterlyReport: await enrichLatestQuarterlyReportWithNetValue(reports[0]),
+    message: `已获取 ${enrichedQuarterly.length} 份季报，${enrichedAnnual.length} 份年报。`,
+    reports: {
+      quarterly: enrichedQuarterly,
+      annual: enrichedAnnual,
+    },
   };
+}
+
+/**
+ * 保留向后兼容的 fetchFundLatestQuarterly 函数
+ * @deprecated 使用 fetchFundReports 替代
+ */
+export async function fetchFundLatestQuarterly(fundCode: string): Promise<FundReportsResult> {
+  return fetchFundReports(fundCode);
 }
 
 function createStoredFallbackResult(fundCode: string, message: string): StoredFundQuarterlyResult {
@@ -695,23 +816,43 @@ function createStoredFallbackResult(fundCode: string, message: string): StoredFu
   };
 }
 
-function parseStoredPayload(payloadJson: string | null, fundCode: string): FundQuarterlyResult {
+function parseStoredPayload(payloadJson: string | null, fundCode: string): FundReportsResult {
   if (!payloadJson) {
     return buildFailedResult(fundCode, "尚未抓取季报。");
   }
 
   try {
-    const parsed = JSON.parse(payloadJson) as Partial<FundQuarterlyResult>;
+    const parsed = JSON.parse(payloadJson) as Partial<FundReportsResult>;
 
     if (!parsed || typeof parsed !== "object" || typeof parsed.fundCode !== "string") {
       return buildFailedResult(fundCode, "本地缓存格式无效。");
     }
 
+    // 处理新旧数据格式兼容性
+    // 旧数据格式：有 latestQuarterlyReport 字段
+    // 新数据格式：有 reports 字段
+    const hasNewFormat = parsed.reports !== undefined;
+    const hasOldFormat = 'latestQuarterlyReport' in parsed;
+
+    if (!hasNewFormat && hasOldFormat) {
+      // 旧数据降级：将单份季报放入新结构
+      const oldReport = (parsed as unknown as { latestQuarterlyReport?: FundReportItem | null }).latestQuarterlyReport;
+      return {
+        ...buildFailedResult(parsed.fundCode || fundCode, "本地缓存为旧格式，建议重新抓取。"),
+        ...parsed,
+        fundCode: parsed.fundCode || fundCode,
+        reports: {
+          quarterly: oldReport ? [oldReport] : [],
+          annual: [],
+        },
+      };
+    }
+
     return {
-      ...buildFailedResult(fundCode, "本地缓存格式无效。"),
+      ...buildFailedResult(parsed.fundCode || fundCode, "本地缓存格式无效。"),
       ...parsed,
       fundCode: parsed.fundCode || fundCode,
-      latestQuarterlyReport: parsed.latestQuarterlyReport ?? null,
+      reports: parsed.reports ?? { quarterly: [], annual: [] },
     };
   } catch {
     return buildFailedResult(fundCode, "本地缓存损坏，需重新抓取。");
@@ -757,13 +898,27 @@ export async function saveTrackedFundQuarterly(kind: FundQuarterlyKind, fundCode
     throw new Error("基金代码需为 6 位数字。");
   }
 
-  // 这里的保存策略是“按代码覆盖最近一次结果”，而不是保留完整抓取历史。
+  // 这里的保存策略是"按代码覆盖最近一次结果"，而不是保留完整抓取历史。
   // 原因：当前页面关注的是低频跟踪和阅读，不是历史审计。
-  const result = await fetchFundLatestQuarterly(normalizedFundCode);
+  const result = await fetchFundReports(normalizedFundCode);
+
+  // 抓取失败时不保存到数据库
+  if (result.status !== "success") {
+    throw new Error(result.message || "抓取基金报告失败，请检查基金代码是否正确或稍后重试。");
+  }
+
+  // 确定最新报告日期：优先从季报取，如果没有则从年报取
+  const latestReportDate = (() => {
+    const allReports = [...result.reports.quarterly, ...result.reports.annual];
+    if (allReports.length === 0) return null;
+
+    const sorted = allReports.sort((a, b) =>
+      b.publishDate.localeCompare(a.publishDate)
+    );
+    return new Date(`${sorted[0].publishDate}T00:00:00Z`);
+  })();
+
   const now = new Date();
-  const latestReportDate = result.latestQuarterlyReport?.publishDate
-    ? new Date(`${result.latestQuarterlyReport.publishDate}T00:00:00Z`)
-    : null;
 
   const record = await prisma.fundQuarterlyTracking.upsert({
     where: {
