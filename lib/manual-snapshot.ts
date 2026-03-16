@@ -166,8 +166,8 @@ export function getSnapshotRefreshAvailability(
   groupKey: SnapshotGroupKey,
   now = new Date(),
 ): SnapshotRefreshAvailability {
-  // 口径约束：BTC 允许 7x24；指数和汇率只在纽约常规交易时段开放手动刷新。
-  if (groupKey === "btc") {
+  // 口径约束：BTC 与外汇允许 7x24；只有美股指数受纽约常规交易时段限制。
+  if (groupKey === "btc" || groupKey === "forex") {
     return {
       canRefresh: true,
       reason: null,
