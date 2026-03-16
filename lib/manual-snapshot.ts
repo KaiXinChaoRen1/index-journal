@@ -100,6 +100,15 @@ function toFriendlyErrorMessage(error: unknown) {
     return "尚未配置 TWELVE_DATA_API_KEY，暂时无法刷新最新快照。";
   }
 
+  // 超时或网络超时
+  if (
+    raw.includes("timeout") ||
+    raw.includes("The operation was aborted") ||
+    raw.includes("AbortError")
+  ) {
+    return "数据源响应较慢，暂时无法获取最新快照，请稍后手动刷新。";
+  }
+
   return "刷新失败，当前仍显示最近一次快照或日线数据。";
 }
 
@@ -137,6 +146,65 @@ function getCooldownRemainingSeconds(lastSuccessAt: Date | null, now = Date.now(
   }
 
   return Math.ceil(remainingMs / 1000);
+}
+
+// 自动刷新最大容忍时间（2天）
+const MAX_AUTO_REFRESH_AGE_MS = 2 * 24 * 60 * 60 * 1000;
+
+/**
+ * 判断是否需要自动刷新。
+ *
+ * 用于页面进入时的服务端判断：如果数据超过指定时间未更新，
+ * 应该自动触发刷新，而不是让用户看到过时数据。
+ */
+export function shouldAutoRefresh(
+  lastSuccessAt: Date | null,
+  options?: { maxAgeMs?: number }
+): { needed: boolean; reason?: string } {
+  const maxAge = options?.maxAgeMs ?? SNAPSHOT_COOLDOWN_MS;
+
+  if (!lastSuccessAt) {
+    return { needed: true, reason: "无历史快照" };
+  }
+
+  const ageMs = Date.now() - lastSuccessAt.getTime();
+
+  // 超过2天未刷新，强烈建议刷新
+  if (ageMs > MAX_AUTO_REFRESH_AGE_MS) {
+    return { needed: true, reason: `数据已过期 ${Math.round(ageMs / 60000)} 分钟` };
+  }
+
+  // 超过指定冷却时间，建议刷新
+  if (ageMs > maxAge) {
+    return { needed: true, reason: `数据已过期 ${Math.round(ageMs / 60000)} 分钟` };
+  }
+
+  return { needed: false };
+}
+
+/**
+ * 后台触发刷新（不等待结果）。
+ *
+ * 用于首页等场景：快速检查是否需要刷新，如果需要则在后台触发，
+ * 不阻塞页面渲染。用户后续进入 BTC/Forex 页面时数据已更新。
+ */
+export async function triggerBackgroundRefresh(groupKey: SnapshotGroupKey): Promise<void> {
+  const state = await getSnapshotGroupState(groupKey);
+  const check = shouldAutoRefresh(state.lastSuccessAt);
+  const availability = getSnapshotRefreshAvailability(groupKey);
+
+  if (!check.needed || !availability.canRefresh) {
+    return;
+  }
+
+  // 使用 Promise.resolve 确保异步执行，不阻塞当前调用方
+  Promise.resolve().then(async () => {
+    try {
+      await refreshSnapshotGroup(groupKey);
+    } catch {
+      // 后台刷新失败静默处理
+    }
+  });
 }
 
 function buildCooldownMessage(lastSuccessAt: Date, remainingSeconds: number) {
@@ -216,6 +284,7 @@ async function fetchQuoteSnapshot(symbol: string, sourceLabel: string): Promise<
   const response = await fetch(url.toString(), {
     headers: { accept: "application/json" },
     cache: "no-store",
+    signal: AbortSignal.timeout(5000),
   });
 
   if (!response.ok) {

@@ -46,6 +46,10 @@ export function parseQuoteTime(payload: {
   timestamp?: number | string | null;
   last_quote_at?: number | string | null;
 }) {
+  // 解析官方“报价时间”优先级：
+  // 1) last_quote_at（秒级时间戳，优先使用）
+  // 2) datetime（ISO 或“YYYY-MM-DD HH:MM:SS”，自动补 Z 解析为 UTC）
+  // 3) timestamp（秒级时间戳）
   const byLastQuoteAt =
     payload.last_quote_at === undefined || payload.last_quote_at === null
       ? null

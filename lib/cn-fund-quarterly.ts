@@ -859,6 +859,25 @@ function parseStoredPayload(payloadJson: string | null, fundCode: string): FundR
   }
 }
 
+function cleanReportForList(report: FundReportItem): FundReportItem {
+  // 列表 API 去掉纯文本字段，减少传输体积
+  // netValuePerformance 仅用于后台解析，前端使用 netValuePerformanceTables
+  return {
+    ...report,
+    netValuePerformance: null,
+  };
+}
+
+function cleanReportsResultForList(result: FundReportsResult): FundReportsResult {
+  return {
+    ...result,
+    reports: {
+      quarterly: result.reports.quarterly.map(cleanReportForList),
+      annual: result.reports.annual.map(cleanReportForList),
+    },
+  };
+}
+
 function toStoredFundQuarterlyResult(record: {
   fundCode: string;
   latestPayloadJson: string | null;
@@ -869,7 +888,7 @@ function toStoredFundQuarterlyResult(record: {
   const parsed = parseStoredPayload(record.latestPayloadJson, record.fundCode);
 
   return {
-    ...parsed,
+    ...cleanReportsResultForList(parsed),
     lastFetchedAt: record.lastFetchedAt ? record.lastFetchedAt.toISOString() : null,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),

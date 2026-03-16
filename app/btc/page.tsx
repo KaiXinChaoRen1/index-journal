@@ -3,7 +3,10 @@ import { MetricRow } from "@/app/components/metric-row";
 import { ManualRefreshControl } from "@/app/components/manual-refresh-control";
 import { SiteMenu } from "@/app/components/site-menu";
 import { formatIndexValue } from "@/lib/market-shared";
-import { getSnapshotGroupState, getSnapshotRefreshAvailability } from "@/lib/manual-snapshot";
+import {
+  getSnapshotGroupState,
+  getSnapshotRefreshAvailability,
+} from "@/lib/manual-snapshot";
 import {
   formatDate,
   getBtcCard,
@@ -14,12 +17,14 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function BtcPage() {
-  const [card, defaultChart, snapshotState] = await Promise.all([
+  // BTC 页面只读取数据，刷新逻辑由首页后台触发或用户手动触发
+  // 避免用户进入页面时因同步刷新而等待
+  const [card, defaultChart, snapshotState, refreshAvailability] = await Promise.all([
     getBtcCard(),
     getDefaultBtcChart(),
     getSnapshotGroupState("btc"),
+    getSnapshotRefreshAvailability("btc"),
   ]);
-  const availability = getSnapshotRefreshAvailability("btc");
   const snapshot = snapshotState.payload["BTC/USD"];
 
   return (
@@ -44,8 +49,8 @@ export default async function BtcPage() {
         title="手动快照刷新（BTC/USD）"
         initialLastSuccessAt={snapshotState.lastSuccessAt ? snapshotState.lastSuccessAt.toISOString() : null}
         initialLastErrorMessage={snapshotState.lastErrorMessage}
-        initialCanRefresh={availability.canRefresh}
-        initialAvailabilityReason={availability.reason}
+        initialCanRefresh={refreshAvailability.canRefresh}
+        initialAvailabilityReason={refreshAvailability.reason}
       />
 
       {!card ? (

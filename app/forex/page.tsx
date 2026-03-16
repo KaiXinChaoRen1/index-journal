@@ -3,7 +3,10 @@ import { MetricRow } from "@/app/components/metric-row";
 import { ManualRefreshControl } from "@/app/components/manual-refresh-control";
 import { SiteMenu } from "@/app/components/site-menu";
 import { formatFxValue } from "@/lib/market-shared";
-import { getSnapshotGroupState, getSnapshotRefreshAvailability } from "@/lib/manual-snapshot";
+import {
+  getSnapshotGroupState,
+  getSnapshotRefreshAvailability,
+} from "@/lib/manual-snapshot";
 import {
   formatDate,
   getDefaultForexCharts,
@@ -18,12 +21,14 @@ function formatOfficialFxTime(latestDate: Date) {
 }
 
 export default async function ForexPage() {
-  const [cards, defaultCharts, snapshotState] = await Promise.all([
+  // 外汇页面只读取数据，刷新逻辑由首页后台触发或用户手动触发
+  // 避免用户进入页面时因同步刷新而等待
+  const [cards, defaultCharts, snapshotState, refreshAvailability] = await Promise.all([
     getForexCards(),
     getDefaultForexCharts(),
     getSnapshotGroupState("forex"),
+    getSnapshotRefreshAvailability("forex"),
   ]);
-  const availability = getSnapshotRefreshAvailability("forex");
   const coreCard = cards.find((card) => card.priority === "core") ?? null;
   const otherCards = cards.filter((card) => card.priority !== "core");
   const coreSnapshot = coreCard ? snapshotState.payload[coreCard.symbol] : null;
@@ -58,8 +63,8 @@ export default async function ForexPage() {
         title="手动快照刷新（汇率组合）"
         initialLastSuccessAt={snapshotState.lastSuccessAt ? snapshotState.lastSuccessAt.toISOString() : null}
         initialLastErrorMessage={snapshotState.lastErrorMessage}
-        initialCanRefresh={availability.canRefresh}
-        initialAvailabilityReason={availability.reason}
+        initialCanRefresh={refreshAvailability.canRefresh}
+        initialAvailabilityReason={refreshAvailability.reason}
       />
 
       {cards.length === 0 ? (

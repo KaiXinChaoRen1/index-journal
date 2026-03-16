@@ -24,7 +24,7 @@ import {
  * 这样做的好处是页面之间的数据流非常统一，阅读时不需要切换太多思路。
  */
 export const BTC_SYMBOL = "BTC/USD" as const;
-const BTC_DEFAULT_CHART_RANGE: ChartRange = "MAX";
+const BTC_DEFAULT_CHART_RANGE: ChartRange = "1Y";
 
 type DailyPriceRecord = {
   symbol: string;
