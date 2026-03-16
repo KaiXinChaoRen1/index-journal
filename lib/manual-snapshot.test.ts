@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getSnapshotRefreshAvailability } from "./manual-snapshot";
+import { getSnapshotCooldownMs, getSnapshotRefreshAvailability } from "./manual-snapshot";
 
 describe("manual-snapshot", () => {
   it("allows forex refresh on weekends", () => {
@@ -26,5 +26,11 @@ describe("manual-snapshot", () => {
 
     expect(availability.canRefresh).toBe(false);
     expect(availability.reason).toContain("周末休市");
+  });
+
+  it("uses a one-minute cooldown for homepage market snapshots only", () => {
+    expect(getSnapshotCooldownMs("market")).toBe(60_000);
+    expect(getSnapshotCooldownMs("forex")).toBe(300_000);
+    expect(getSnapshotCooldownMs("btc")).toBe(300_000);
   });
 });

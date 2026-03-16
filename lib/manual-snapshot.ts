@@ -5,7 +5,11 @@ import { formatDateTime, parseQuoteTime } from "@/lib/live-price-shared";
 import { prisma } from "@/lib/prisma";
 
 const TWELVE_DATA_QUOTE_URL = "https://api.twelvedata.com/quote";
-const SNAPSHOT_COOLDOWN_MS = 5 * 60 * 1000;
+const SNAPSHOT_COOLDOWN_MS_BY_GROUP: Record<SnapshotGroupKey, number> = {
+  market: 60 * 1000,
+  forex: 5 * 60 * 1000,
+  btc: 5 * 60 * 1000,
+};
 
 /**
  * 手动快照服务层。
@@ -135,12 +139,20 @@ function toSnapshotState(record: {
   };
 }
 
-function getCooldownRemainingSeconds(lastSuccessAt: Date | null, now = Date.now()) {
+export function getSnapshotCooldownMs(groupKey: SnapshotGroupKey) {
+  return SNAPSHOT_COOLDOWN_MS_BY_GROUP[groupKey];
+}
+
+function getCooldownRemainingSeconds(
+  groupKey: SnapshotGroupKey,
+  lastSuccessAt: Date | null,
+  now = Date.now(),
+) {
   if (!lastSuccessAt) {
     return 0;
   }
 
-  const remainingMs = SNAPSHOT_COOLDOWN_MS - (now - lastSuccessAt.getTime());
+  const remainingMs = getSnapshotCooldownMs(groupKey) - (now - lastSuccessAt.getTime());
   if (remainingMs <= 0) {
     return 0;
   }
@@ -158,10 +170,11 @@ const MAX_AUTO_REFRESH_AGE_MS = 2 * 24 * 60 * 60 * 1000;
  * 应该自动触发刷新，而不是让用户看到过时数据。
  */
 export function shouldAutoRefresh(
+  groupKey: SnapshotGroupKey,
   lastSuccessAt: Date | null,
   options?: { maxAgeMs?: number }
 ): { needed: boolean; reason?: string } {
-  const maxAge = options?.maxAgeMs ?? SNAPSHOT_COOLDOWN_MS;
+  const maxAge = options?.maxAgeMs ?? getSnapshotCooldownMs(groupKey);
 
   if (!lastSuccessAt) {
     return { needed: true, reason: "无历史快照" };
@@ -190,7 +203,7 @@ export function shouldAutoRefresh(
  */
 export async function triggerBackgroundRefresh(groupKey: SnapshotGroupKey): Promise<void> {
   const state = await getSnapshotGroupState(groupKey);
-  const check = shouldAutoRefresh(state.lastSuccessAt);
+  const check = shouldAutoRefresh(groupKey, state.lastSuccessAt);
   const availability = getSnapshotRefreshAvailability(groupKey);
 
   if (!check.needed || !availability.canRefresh) {
@@ -207,8 +220,16 @@ export async function triggerBackgroundRefresh(groupKey: SnapshotGroupKey): Prom
   });
 }
 
-function buildCooldownMessage(lastSuccessAt: Date, remainingSeconds: number) {
-  return `最近一次更新于 ${formatDateTime(lastSuccessAt)} UTC，5 分钟内不重复请求（剩余 ${remainingSeconds} 秒）。`;
+function buildCooldownMessage(
+  groupKey: SnapshotGroupKey,
+  lastSuccessAt: Date,
+  remainingSeconds: number,
+) {
+  const cooldownSeconds = Math.floor(getSnapshotCooldownMs(groupKey) / 1000);
+  const cooldownMinutes =
+    cooldownSeconds % 60 === 0 ? `${cooldownSeconds / 60} 分钟` : `${cooldownSeconds} 秒`;
+
+  return `最近一次更新于 ${formatDateTime(lastSuccessAt)} UTC，${cooldownMinutes}内不重复请求（剩余 ${remainingSeconds} 秒）。`;
 }
 
 function getNewYorkSessionClock(now = new Date()) {
@@ -357,14 +378,18 @@ export async function refreshSnapshotGroup(groupKey: SnapshotGroupKey): Promise<
     };
   }
 
-  const cooldownRemainingSeconds = getCooldownRemainingSeconds(currentState.lastSuccessAt, now.getTime());
+  const cooldownRemainingSeconds = getCooldownRemainingSeconds(
+    groupKey,
+    currentState.lastSuccessAt,
+    now.getTime(),
+  );
   const hasAllSymbols = groupConfig.symbols.every((symbol) => currentState.payload[symbol]);
 
   if (cooldownRemainingSeconds > 0 && hasAllSymbols && currentState.lastSuccessAt) {
     return {
       ok: true,
       status: "cooldown",
-      message: buildCooldownMessage(currentState.lastSuccessAt, cooldownRemainingSeconds),
+      message: buildCooldownMessage(groupKey, currentState.lastSuccessAt, cooldownRemainingSeconds),
       cooldownRemainingSeconds,
       state: currentState,
     };

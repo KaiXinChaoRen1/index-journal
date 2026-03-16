@@ -73,6 +73,11 @@ export function ManualRefreshControl({
     return `最近快照：${formatLocalTime(lastSuccessAt)}`;
   }, [lastSuccessAt]);
 
+  const noteText =
+    group === "market"
+      ? "昨夜收盘到正式 EOD 完成前可参考手动快照；纽约交易时段首页头部允许显示实时价，区间统计继续使用日线历史口径。"
+      : "当前价格使用最近快照；区间统计继续使用日线历史口径。";
+
   async function handleRefresh() {
     startTransition(async () => {
       try {
@@ -108,7 +113,7 @@ export function ManualRefreshControl({
       </div>
       <p className="refresh-meta">{metaText}</p>
       {statusMessage ? <p className="refresh-status">{statusMessage}</p> : null}
-      <p className="refresh-note">当前价格使用最近快照；区间统计继续使用日线历史口径。</p>
+      <p className="refresh-note">{noteText}</p>
     </section>
   );
 }

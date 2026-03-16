@@ -2,6 +2,7 @@ import { MarketChart } from "@/app/components/market-chart";
 import { MetricRow } from "@/app/components/metric-row";
 import { ManualRefreshControl } from "@/app/components/manual-refresh-control";
 import { SiteMenu } from "@/app/components/site-menu";
+import { LivePrice } from "@/app/components/live-price";
 import { ensureStartupCompensation } from "@/lib/dual-track-sync";
 import {
   formatDate,
@@ -41,6 +42,7 @@ export default async function HomePage() {
     getSnapshotGroupState("market"),
   ]);
   const availability = getSnapshotRefreshAvailability("market");
+  const showLivePrice = availability.canRefresh;
 
   return (
     <main className="page-shell">
@@ -84,13 +86,17 @@ export default async function HomePage() {
                   <h2>{card.title}</h2>
                   <p className="hero-copy card-copy">{card.description}</p>
                 </div>
-                <div className="headline-metric">
-                  <p>{formatIndexValue(card.currentPrice)}</p>
-                  <span>
-                    {card.headlineMode === "morning_snapshot" ? "晨间快照" : "官方收盘"} ·{" "}
-                    {card.headlineTime} UTC
-                  </span>
-                </div>
+                {showLivePrice ? (
+                  <LivePrice symbol={card.symbol} mode="index" />
+                ) : (
+                  <div className="headline-metric">
+                    <p>{formatIndexValue(card.currentPrice)}</p>
+                    <span>
+                      {card.headlineMode === "morning_snapshot" ? "昨夜收盘" : "官方收盘"} ·{" "}
+                      {card.headlineTime} UTC
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="metric-table">
@@ -143,10 +149,8 @@ export default async function HomePage() {
 
               <div className="card-footer">
                 <span>数据日期 {formatDate(card.latestDate)}</span>
-                <span>当前价格来源 {card.headlineSourceLabel}</span>
-                <span>
-                  当前价格时间 {card.headlineTime} UTC
-                </span>
+                <span>当前价格来源 {showLivePrice ? "Twelve Data Official API" : card.headlineSourceLabel}</span>
+                <span>{showLivePrice ? "当前价格口径 盘中实时价（约 1 分钟刷新）" : `当前价格时间 ${card.headlineTime} UTC`}</span>
                 <span>方向口径 {card.marketKey}</span>
               </div>
             </article>
