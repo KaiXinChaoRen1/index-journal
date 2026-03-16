@@ -165,6 +165,189 @@ docker exec index-journal npm run sync:data
 - 如果不提供 `TWELVE_DATA_API_KEY`，页面仍可启动，但同步脚本和手动刷新不会成功
 - 也可以直接使用仓库内的 `./deploy.sh`，它会完成构建和容器启动
 
+## Linux 服务器从克隆到运行
+
+下面这套流程面向“拿到一台 Linux 云服务器，从零开始拉代码并跑起来”。
+
+### 你需要先准备好
+
+1. 一台能联网的 Linux 服务器
+2. 服务器已安装 `git` 和 `docker`
+3. 你自己的 `TWELVE_DATA_API_KEY`
+4. 云厂商安全组或服务器防火墙已放行你的服务端口，例如 `3000`
+
+如果你还没装 Docker，以 Ubuntu / Debian 为例：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl git
+curl -fsSL https://get.docker.com | sh
+sudo systemctl enable docker
+sudo systemctl start docker
+```
+
+### 1. 克隆仓库
+
+如果你的服务器已经配置了 GitHub SSH Key：
+
+```bash
+git clone git@github.com:KaiXinChaoRen1/index-journal.git
+cd index-journal
+```
+
+如果你更想用 HTTPS：
+
+```bash
+git clone https://github.com/KaiXinChaoRen1/index-journal.git
+cd index-journal
+```
+
+### 2. 设置环境变量
+
+先把 API Key 放进当前 shell：
+
+```bash
+export TWELVE_DATA_API_KEY="你的 Twelve Data API Key"
+```
+
+如果你希望每次登录服务器都自动生效，可以把它写进 `~/.bashrc` 或 `~/.zshrc`。
+
+### 3. 构建镜像
+
+```bash
+docker build -t index-journal:latest .
+```
+
+### 4. 创建持久化目录
+
+```bash
+mkdir -p ./data
+```
+
+这个目录会映射到容器里的 `/data`，用来保存 SQLite 数据库。
+
+### 5. 启动容器
+
+```bash
+docker run -d \
+  --name index-journal \
+  -p 3000:3000 \
+  -e TWELVE_DATA_API_KEY="${TWELVE_DATA_API_KEY}" \
+  -e DATABASE_URL="file:/data/dev.db" \
+  -v "$(pwd)/data:/data" \
+  --restart unless-stopped \
+  index-journal:latest
+```
+
+容器启动后会自动执行：
+
+1. `prisma db push`
+2. `next start`
+
+也就是说，数据库结构会先初始化，再启动 Web 服务。
+
+### 6. 首次同步历史数据
+
+```bash
+docker exec index-journal npm run sync:data
+```
+
+如果你这一步暂时不执行，页面也能打开，只是会处于“无数据”状态。
+
+### 7. 验证服务是否正常
+
+看容器状态：
+
+```bash
+docker ps
+```
+
+看启动日志：
+
+```bash
+docker logs -f index-journal
+```
+
+本机验证：
+
+```bash
+curl http://127.0.0.1:3000
+```
+
+浏览器访问：
+
+```text
+http://你的服务器公网 IP:3000
+```
+
+如果外网打不开，优先检查：
+
+1. 云服务器安全组是否放行 `3000`
+2. 服务器本机防火墙是否放行 `3000`
+3. 容器是否真的启动成功
+
+### 8. 后续常用操作
+
+停止容器：
+
+```bash
+docker stop index-journal
+```
+
+启动已存在的容器：
+
+```bash
+docker start index-journal
+```
+
+重启容器：
+
+```bash
+docker restart index-journal
+```
+
+查看最近日志：
+
+```bash
+docker logs --tail 200 index-journal
+```
+
+进入容器：
+
+```bash
+docker exec -it index-journal sh
+```
+
+### 9. 更新到最新代码
+
+```bash
+cd index-journal
+git pull
+docker build -t index-journal:latest .
+docker rm -f index-journal
+docker run -d \
+  --name index-journal \
+  -p 3000:3000 \
+  -e TWELVE_DATA_API_KEY="${TWELVE_DATA_API_KEY}" \
+  -e DATABASE_URL="file:/data/dev.db" \
+  -v "$(pwd)/data:/data" \
+  --restart unless-stopped \
+  index-journal:latest
+```
+
+因为数据库挂载在宿主机 `./data`，所以重建容器后数据仍然会保留。
+
+### 10. 用脚本部署
+
+如果你不想手敲 `docker build` 和 `docker run`，也可以直接用仓库里的脚本：
+
+```bash
+export TWELVE_DATA_API_KEY="你的 Twelve Data API Key"
+./deploy.sh
+```
+
+脚本会完成镜像构建、替换旧容器和启动新容器。
+
 ## 当前页面与接口
 
 当前页面：
