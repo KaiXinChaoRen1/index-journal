@@ -49,6 +49,59 @@ a {
   margin-bottom: 28px;
 }
 
+.site-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+.site-brand {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.site-brand strong {
+  font-size: 1.1rem;
+}
+
+.site-brand-kicker {
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.site-brand.active strong,
+.site-primary-link.active {
+  color: #2f6840;
+}
+
+.site-primary-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.site-primary-link {
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.94rem;
+  transition:
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.site-primary-link:hover,
+.site-primary-link.active {
+  background: rgba(255, 250, 242, 0.7);
+  color: var(--text);
+}
+
 .site-menu {
   position: relative;
 }
@@ -202,6 +255,41 @@ a {
   margin-bottom: 32px;
 }
 
+.hero-glance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.hero-glance-card {
+  padding: 20px 22px;
+  border-radius: 24px;
+  background: rgba(255, 250, 242, 0.74);
+  border: 1px solid rgba(58, 46, 32, 0.1);
+  box-shadow: 0 18px 40px rgba(49, 38, 23, 0.08);
+}
+
+.hero-glance-card h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.hero-glance-value {
+  margin: 10px 0 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1;
+  font-weight: 700;
+}
+
+.hero-glance-copy {
+  margin: 12px 0 0;
+  max-width: 28rem;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
 .eyebrow {
   margin: 0 0 12px;
   color: var(--muted);
@@ -299,6 +387,22 @@ a {
 .headline-metric span {
   display: inline-block;
   margin-top: 10px;
+}
+
+.headline-warning {
+  display: block;
+  max-width: 16rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.headline-secondary {
+  display: block;
+  max-width: 18rem;
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .live-price-meta {
@@ -575,7 +679,7 @@ a {
 }
 
 .refresh-panel {
-  margin-bottom: 20px;
+  margin-top: 24px;
   padding: 16px 18px;
   border-radius: 20px;
   background: rgba(255, 250, 242, 0.7);
@@ -937,7 +1041,8 @@ a {
 @media (max-width: 900px) {
   .card-grid,
   .log-grid,
-  .dev-status-grid {
+  .dev-status-grid,
+  .hero-glance-grid {
     grid-template-columns: 1fr;
   }
 
@@ -975,6 +1080,10 @@ a {
     min-width: 88px;
     gap: 10px;
     padding: 0 14px;
+  }
+
+  .site-primary-nav {
+    display: none;
   }
 
   .menu-popover {

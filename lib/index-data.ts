@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getDisplayIndexPoints } from "@/lib/display-index-points";
 import {
   getTodayMorningSnapshots,
   shouldPreferMorningSnapshot,
@@ -97,6 +98,10 @@ export type MarketCard = {
   headlineMode: "morning_snapshot" | "formal_eod";
   headlineTime: string;
   headlineSourceLabel: string;
+  displayPrice: number | null;
+  displaySourceLabel: string | null;
+  displaySourceTime: string | null;
+  displayWarningMessage: string | null;
 };
 
 function formatUsEasternTradingDate(tradingDate: Date) {
@@ -209,11 +214,15 @@ function buildMarketCard(market: MarketDefinition, rows: DailyPriceRecord[]): Ma
     headlineMode: "formal_eod",
     headlineTime: formatUsEasternTradingDate(latest.date),
     headlineSourceLabel: "Twelve Data Time Series (1day)",
+    displayPrice: null,
+    displaySourceLabel: null,
+    displaySourceTime: null,
+    displayWarningMessage: null,
   };
 }
 
 export async function getMarketCards() {
-  const [cards, snapshots, preferSnapshot] = await Promise.all([
+  const [cards, snapshots, preferSnapshot, displayIndexPoints] = await Promise.all([
     Promise.all(
       MARKET_DEFINITIONS.map(async (market) => {
         const rows = await prisma.dailyPrice.findMany({
@@ -226,29 +235,35 @@ export async function getMarketCards() {
     ),
     getTodayMorningSnapshots(),
     shouldPreferMorningSnapshot(),
+    getDisplayIndexPoints(),
   ]);
 
   const baseCards = cards.filter((card): card is MarketCard => card !== null);
 
-  if (!preferSnapshot) {
-    return baseCards;
-  }
-
-  // 这里只覆盖首页头部“当前价格口径”，不改长期指标。
   return baseCards.map((card) => {
+    const displayPoint = displayIndexPoints.get(card.marketKey) ?? null;
     const snapshot = snapshots.get(card.symbol);
-
-    if (!snapshot) {
-      return card;
-    }
+    const effectiveCard =
+      preferSnapshot && snapshot
+        ? {
+            ...card,
+            currentPrice: snapshot.price,
+            dailyChangePct: snapshot.percentChange,
+            headlineMode: "morning_snapshot" as const,
+            headlineTime: `${formatDateTime(snapshot.sourceTimestamp)} UTC`,
+            headlineSourceLabel: snapshot.sourceLabel,
+          }
+        : card;
 
     return {
-      ...card,
-      currentPrice: snapshot.price,
-      dailyChangePct: snapshot.percentChange,
-      headlineMode: "morning_snapshot" as const,
-      headlineTime: `${formatDateTime(snapshot.sourceTimestamp)} UTC`,
-      headlineSourceLabel: snapshot.sourceLabel,
+      ...effectiveCard,
+      displayPrice:
+        displayPoint && displayPoint.sourceStatus !== "unavailable"
+          ? round(displayPoint.price)
+          : null,
+      displaySourceLabel: displayPoint?.sourceLabel ?? null,
+      displaySourceTime: displayPoint?.sourceTimeLabel ?? null,
+      displayWarningMessage: displayPoint?.warningMessage ?? null,
     };
   });
 }
@@ -336,6 +351,10 @@ export async function getMarketApiPayload() {
         headlineMode: card.headlineMode,
         headlineTime: card.headlineTime,
         headlineSourceLabel: card.headlineSourceLabel,
+        displayPrice: card.displayPrice,
+        displaySourceLabel: card.displaySourceLabel,
+        displaySourceTime: card.displaySourceTime,
+        displayWarningMessage: card.displayWarningMessage,
       },
     ]),
   );

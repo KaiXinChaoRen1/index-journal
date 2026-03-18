@@ -20,6 +20,22 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function formatHeadlineLabel(showLivePrice: boolean, card: (Awaited<ReturnType<typeof getMarketCards>>)[number]) {
+  if (card.displayPrice !== null) {
+    return "真实指数点位";
+  }
+
+  if (showLivePrice) {
+    return "纽约时段可看 ETF 实时价";
+  }
+
+  return card.headlineMode === "morning_snapshot" ? "当前优先 ETF 昨夜收盘" : "当前优先 ETF 官方 EOD";
+}
+
+function getHeroPrimaryValue(card: (Awaited<ReturnType<typeof getMarketCards>>)[number]) {
+  return card.displayPrice ?? card.currentPrice;
+}
+
 // 首页是服务端页面入口。
 // 阅读建议：先看这里用了哪些服务函数，再往 lib/ 里追数据是如何被读取和计算的。
 export default async function HomePage() {
@@ -43,6 +59,11 @@ export default async function HomePage() {
   ]);
   const availability = getSnapshotRefreshAvailability("market");
   const showLivePrice = availability.canRefresh;
+  const leadCard = cards[0] ?? null;
+  const strongestCard =
+    cards.length > 0
+      ? [...cards].sort((left, right) => Math.abs((right.dailyChangePct ?? 0)) - Math.abs((left.dailyChangePct ?? 0)))[0]
+      : null;
 
   return (
     <main className="page-shell">
@@ -55,20 +76,36 @@ export default async function HomePage() {
           <p className="eyebrow">Index Journal</p>
           <h1>指数日志</h1>
           <p className="hero-copy">
-            一个围绕指数投资、市场观察与 AI 协作开发展开的个人站点。当前使用 SPY 与
-            QQQ 作为标普 500 和纳指 100 的替代跟踪，专注展示盘后可读、可复盘的核心信息。
+            每天先看两个核心市场的位置、方向和回撤，不把首页做成交易终端，也不把真正重要的信息埋进次级页面。
           </p>
         </div>
-      </section>
+        {leadCard ? (
+          <div className="hero-glance-grid">
+            <article className="hero-glance-card">
+              <p className="metric-group-title">今日先看</p>
+              <h2>{leadCard.title}</h2>
+              <p className="hero-glance-value">{formatIndexValue(getHeroPrimaryValue(leadCard))}</p>
+              <p className="hero-glance-copy">
+                {formatHeadlineLabel(showLivePrice, leadCard)}，数据日期 {formatDate(leadCard.latestDate)}。
+              </p>
+            </article>
 
-      <ManualRefreshControl
-        group="market"
-        title="手动快照刷新"
-        initialLastSuccessAt={snapshotState.lastSuccessAt ? snapshotState.lastSuccessAt.toISOString() : null}
-        initialLastErrorMessage={snapshotState.lastErrorMessage}
-        initialCanRefresh={availability.canRefresh}
-        initialAvailabilityReason={availability.reason}
-      />
+            {strongestCard ? (
+              <article className="hero-glance-card">
+                <p className="metric-group-title">日内方向</p>
+                <h2>{strongestCard.title}</h2>
+                <p className={strongestCard.dailyChangePct >= 0 ? "hero-glance-value positive" : "hero-glance-value negative"}>
+                  {strongestCard.dailyChangePct >= 0 ? "+" : ""}
+                  {strongestCard.dailyChangePct.toFixed(2)}%
+                </p>
+                <p className="hero-glance-copy">
+                  {strongestCard.symbol} 当日波动最明显，适合先判断昨夜风险偏好是否有变化。
+                </p>
+              </article>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
 
       {cards.length === 0 ? (
         <section className="empty-state">
@@ -79,25 +116,41 @@ export default async function HomePage() {
       ) : (
         <section className="card-grid">
           {cards.map((card) => (
-            <article key={card.marketKey} className="index-card">
-              <div className="card-head">
-                <div>
-                  <p className="index-code">{card.symbol}</p>
-                  <h2>{card.title}</h2>
-                  <p className="hero-copy card-copy">{card.description}</p>
-                </div>
-                {showLivePrice ? (
-                  <LivePrice symbol={card.symbol} mode="index" />
-                ) : (
-                  <div className="headline-metric">
-                    <p>{formatIndexValue(card.currentPrice)}</p>
-                    <span>
-                      {card.headlineMode === "morning_snapshot" ? "昨夜收盘" : "官方收盘"} ·{" "}
-                      {card.headlineTime} UTC
-                    </span>
+              <article key={card.marketKey} className="index-card">
+                <div className="card-head">
+                  <div>
+                    <p className="index-code">{card.symbol}</p>
+                    <h2>{card.title}</h2>
+                    <p className="hero-copy card-copy">{card.description}</p>
                   </div>
-                )}
-              </div>
+                  {card.displayPrice !== null ? (
+                    <div className="headline-metric">
+                      <p>{formatIndexValue(card.displayPrice)}</p>
+                      <span>
+                        真实指数点位 · {card.displaySourceTime ?? "最新可用点位"}
+                      </span>
+                      <span className="headline-secondary">
+                        ETF 当前价格 · {formatIndexValue(card.currentPrice)} · {card.headlineTime}
+                      </span>
+                      {card.displayWarningMessage ? (
+                        <span className="headline-warning">{card.displayWarningMessage}</span>
+                      ) : null}
+                    </div>
+                  ) : showLivePrice ? (
+                    <LivePrice symbol={card.symbol} mode="index" />
+                  ) : (
+                    <div className="headline-metric">
+                      <p>{formatIndexValue(card.currentPrice)}</p>
+                      <span>
+                        {card.headlineMode === "morning_snapshot" ? "昨夜收盘" : "官方收盘"} ·{" "}
+                        {card.headlineTime}
+                      </span>
+                      {card.displayWarningMessage ? (
+                        <span className="headline-warning">{card.displayWarningMessage}</span>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
 
               <div className="metric-table">
                 <div className="metric-group">
@@ -149,14 +202,37 @@ export default async function HomePage() {
 
               <div className="card-footer">
                 <span>数据日期 {formatDate(card.latestDate)}</span>
-                <span>当前价格来源 {showLivePrice ? "Twelve Data Official API" : card.headlineSourceLabel}</span>
-                <span>{showLivePrice ? "当前价格口径 盘中实时价（约 1 分钟刷新）" : `当前价格时间 ${card.headlineTime} UTC`}</span>
+                <span>
+                  头部点位来源{" "}
+                  {card.displayPrice !== null
+                    ? card.displaySourceLabel
+                    : showLivePrice
+                      ? "Twelve Data Official API"
+                      : card.headlineSourceLabel}
+                </span>
+                <span>
+                  {card.displayPrice !== null
+                    ? `头部点位时间 ${card.displaySourceTime ?? "最新可用点位"}`
+                    : showLivePrice
+                      ? "当前价格口径 ETF 盘中实时价（约 1 分钟刷新）"
+                      : `当前价格时间 ${card.headlineTime}`}
+                </span>
+                <span>指标口径 {card.symbol} 日线历史</span>
                 <span>方向口径 {card.marketKey}</span>
               </div>
             </article>
           ))}
         </section>
       )}
+
+      <ManualRefreshControl
+        group="market"
+        title="手动快照刷新"
+        initialLastSuccessAt={snapshotState.lastSuccessAt ? snapshotState.lastSuccessAt.toISOString() : null}
+        initialLastErrorMessage={snapshotState.lastErrorMessage}
+        initialCanRefresh={availability.canRefresh}
+        initialAvailabilityReason={availability.reason}
+      />
     </main>
   );
 }

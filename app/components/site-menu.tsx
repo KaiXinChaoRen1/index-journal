@@ -4,10 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-// 导航刻意保持稀疏。低频但重要的页面以后可以继续加在这里，
-// 但首页不应该因为"预留"而变成一排空壳入口。
-// 彩蛋永远放在最后一个。
-const MENU_ITEMS = [
+const PRIMARY_ITEMS = [
   {
     href: "/",
     label: "首页",
@@ -23,6 +20,10 @@ const MENU_ITEMS = [
     label: "BTC 观察",
     description: "补充观察 BTC/USD 的位置与区间变化。",
   },
+] as const;
+
+// 低频但保留价值的页面继续放在次级菜单里，避免首页和顶栏被工具入口填满。
+const SECONDARY_ITEMS = [
   {
     href: "/cn-funds",
     label: "场内基金（证券账户）",
@@ -68,45 +69,64 @@ export function SiteMenu() {
   }, []);
 
   return (
-    <div className="site-menu" ref={rootRef}>
-      <button
-        type="button"
-        className={isOpen ? "menu-trigger active" : "menu-trigger"}
-        aria-label="打开页面菜单"
-        aria-expanded={isOpen}
-        aria-haspopup="menu"
-        onClick={() => setIsOpen((current) => !current)}
-      >
-        <span className="menu-trigger-icon" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </span>
-        <span className="menu-trigger-label">导航</span>
-      </button>
+    <div className="site-nav" ref={rootRef}>
+      <Link href="/" className={pathname === "/" ? "site-brand active" : "site-brand"}>
+        <span className="site-brand-kicker">Index Journal</span>
+        <strong>指数日志</strong>
+      </Link>
 
-      {isOpen ? (
-        <nav className="menu-popover" aria-label="页面导航">
-          <div className="menu-list">
-            {MENU_ITEMS.map((item) => {
-              const isActive = pathname === item.href;
+      <nav className="site-primary-nav" aria-label="主要页面">
+        {PRIMARY_ITEMS.map((item) => {
+          const isActive = pathname === item.href;
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={isActive ? "menu-link active" : "menu-link"}
-                  onClick={() => setIsOpen(false)}
-                >
-                  {isActive ? <span className="menu-link-kicker">当前页</span> : null}
-                  <strong>{item.label}</strong>
-                  <span>{item.description}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
-      ) : null}
+          return (
+            <Link key={item.href} href={item.href} className={isActive ? "site-primary-link active" : "site-primary-link"}>
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="site-menu">
+        <button
+          type="button"
+          className={isOpen ? "menu-trigger active" : "menu-trigger"}
+          aria-label="打开更多页面菜单"
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+          onClick={() => setIsOpen((current) => !current)}
+        >
+          <span className="menu-trigger-icon" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+          <span className="menu-trigger-label">更多</span>
+        </button>
+
+        {isOpen ? (
+          <nav className="menu-popover" aria-label="更多页面">
+            <div className="menu-list">
+              {[...PRIMARY_ITEMS, ...SECONDARY_ITEMS].map((item) => {
+                const isActive = pathname === item.href;
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={isActive ? "menu-link active" : "menu-link"}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    {isActive ? <span className="menu-link-kicker">当前页</span> : null}
+                    <strong>{item.label}</strong>
+                    <span>{item.description}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+        ) : null}
+      </div>
     </div>
   );
 }
