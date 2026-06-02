@@ -10,6 +10,7 @@ import {
   formatIndexValue,
   getDefaultMarketCharts,
   getMarketCards,
+  getMarketStanceText,
   getMissingDataMessage,
 } from "@/lib/index-data";
 import {
@@ -111,7 +112,6 @@ export default async function HomePage() {
         <section className="empty-state">
           <h2>暂无数据</h2>
           <p>{getMissingDataMessage()}</p>
-          <p>请执行 `npm run sync:data` 同步市场日线。</p>
         </section>
       ) : (
         <section className="card-grid">
@@ -122,6 +122,7 @@ export default async function HomePage() {
                     <p className="index-code">{card.symbol}</p>
                     <h2>{card.title}</h2>
                     <p className="hero-copy card-copy">{card.description}</p>
+                    <p className="card-stance">{getMarketStanceText(card)}</p>
                   </div>
                   {card.displayPrice !== null ? (
                     <div className="headline-metric">

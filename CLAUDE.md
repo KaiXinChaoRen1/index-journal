@@ -78,8 +78,8 @@ prisma/
 
 docs/                    # Documentation
   architecture.md        # Data flow and module responsibilities
-  reading-guide.md       # Reading order for new maintainers
   development.md         # Development workflow and troubleshooting
+  design-system.md       # Visual and style conventions
 ```
 
 ## Key Architecture Decisions

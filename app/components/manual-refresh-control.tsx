@@ -14,6 +14,9 @@ function formatLocalTime(value: string | null) {
     return value;
   }
 
+  // 必须固定 timeZone：这是客户端组件，且首屏由服务端注水。
+  // 不指定时区会按各自运行环境的本地时区格式化，服务端与浏览器时区不同就会注水不一致。
+  // 本产品以北京时间为口径，这里统一用 Asia/Shanghai，保证两端输出一致且符合阅读习惯。
   return new Intl.DateTimeFormat("zh-CN", {
     hour12: false,
     month: "2-digit",
@@ -21,6 +24,7 @@ function formatLocalTime(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    timeZone: "Asia/Shanghai",
   }).format(parsed);
 }
 

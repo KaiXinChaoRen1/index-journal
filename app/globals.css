@@ -319,6 +319,19 @@ a {
   line-height: 1.55;
 }
 
+/* 卡片头部的一句话状态结论：用更醒目的字重和左侧色条，
+   让用户先读懂"位置/方向"，再去看下方明细指标。 */
+.card-stance {
+  max-width: 30rem;
+  margin: 12px 0 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--accent, #b8742f);
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
 .index-card,
 .empty-state,
 .subpage-hero {

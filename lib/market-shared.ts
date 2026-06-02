@@ -57,10 +57,14 @@ export function formatFxValue(value: number) {
 }
 
 export function formatDate(value: Date) {
+  // 必须固定 timeZone：交易日来自 `${date}T00:00:00Z`（UTC 零点），
+  // 若按运行环境本地时区格式化，服务端与浏览器时区不同会把同一天显示成不同日期，
+  // 在客户端组件里就会触发 React 注水（hydration）不一致。用 UTC 才能稳定显示真实交易日。
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    timeZone: "UTC",
   }).format(value);
 }
 

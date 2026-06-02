@@ -50,13 +50,13 @@ export const MARKET_DEFINITIONS = [
     marketKey: "SP500",
     title: "S&P 500",
     symbol: "SPY",
-    description: "使用 SPY 作为标普 500 的个人使用替代追踪。",
+    description: "用 SPY 近似追踪标普 500，展示的是 ETF 数据而非指数本体。",
   },
   {
     marketKey: "NASDAQ100",
     title: "Nasdaq 100",
     symbol: "QQQ",
-    description: "使用 QQQ 作为纳指 100 的个人使用替代追踪。",
+    description: "用 QQQ 近似追踪纳指 100，展示的是 ETF 数据而非指数本体。",
   },
 ] as const;
 
@@ -385,9 +385,43 @@ export function isMarketConfigured() {
 }
 
 export function getMissingDataMessage() {
+  // 这两条文案是给"部署后第一次打开却看不到数据"的人看的，
+  // 所以要分清是"没配 Key"还是"配了 Key 但还没同步过数据"这两种不同原因。
   if (!isMarketConfigured()) {
-    return "尚未配置 TWELVE_DATA_API_KEY，请先在 .env 中补充 API Key。";
+    return "未检测到 TWELVE_DATA_API_KEY。请在部署环境的 .env 中配置有效的 Twelve Data API Key 后重启服务。";
   }
 
-  return "数据库里还没有 SPY / QQQ 的最新日线，请先执行 npm run sync:data。";
+  return "已检测到 API Key，但数据库里还没有 SPY / QQQ 的日线数据，需要先完成一次数据同步。";
+}
+
+// 把"距历史高点回撤"翻译成一句普通人能懂的位置判断。
+// 目的：首页不只给一堆数字，而是先回答"现在该不该担心"，
+// 这正是它区别于手机行情 App 的核心价值。
+export function getMarketStanceText(card: MarketCard): string {
+  const drawdown = card.drawdownFromAthPct; // ≤ 0，表示当前价距历史高点的距离
+
+  if (drawdown === null) {
+    return "历史数据不足，暂不给出位置判断。";
+  }
+
+  const distance = Math.abs(drawdown);
+  let position: string;
+
+  if (distance <= 2) {
+    position = "基本贴近历史高点，处在偏高位置";
+  } else if (distance <= 10) {
+    position = "略低于历史高点，仍在高位区间";
+  } else if (distance <= 20) {
+    position = "已从高点中度回撤";
+  } else {
+    position = "已从高点深度回撤";
+  }
+
+  const oneYear = card.oneYearChangePct;
+  const trend =
+    oneYear === null
+      ? ""
+      : `，近一年累计 ${oneYear >= 0 ? "+" : ""}${oneYear.toFixed(1)}%`;
+
+  return `距历史高点 ${drawdown.toFixed(1)}%，${position}${trend}。`;
 }

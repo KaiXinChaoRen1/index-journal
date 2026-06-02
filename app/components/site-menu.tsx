@@ -23,6 +23,7 @@ const PRIMARY_ITEMS = [
 ] as const;
 
 // 低频但保留价值的页面继续放在次级菜单里，避免首页和顶栏被工具入口填满。
+// 基金季报是与指数观察相对独立的一条功能线；关于页是产品说明，都不进主导航。
 const SECONDARY_ITEMS = [
   {
     href: "/cn-funds",
@@ -35,9 +36,9 @@ const SECONDARY_ITEMS = [
     description: "查看场外基金季报中的多份额净值表现表格。",
   },
   {
-    href: "/log",
-    label: "彩蛋",
-    description: "查看产品迭代脉络与设计决策。",
+    href: "/about",
+    label: "关于本站",
+    description: "了解本站是什么、覆盖哪些标的、数据来源与口径。",
   },
 ] as const;
 

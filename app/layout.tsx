@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Index Journal | 指数日志",
   description:
-    "Index Journal 是一个围绕指数投资、AI 协作开发与个人学习过程展开的长期个人项目。",
+    "Index Journal 是一个聚焦美股核心指数的盘后市场观察面板，提供 SPY / QQQ 的阶段表现、长期指标与走势图。",
 };
 
 export default function RootLayout({
