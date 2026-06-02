@@ -1,21 +1,14 @@
 import { prisma } from "@/lib/prisma";
+import { getDailyPriceChartData } from "@/lib/daily-chart-data";
+import { computePeriodChangeMetrics } from "@/lib/daily-price-metrics";
 import {
   formatDate,
   formatPercentOrFallback,
+  parseChartRange,
   type ChartRange,
   type MarketChartData,
 } from "@/lib/market-shared";
-import { getMarketChartData, parseChartRange } from "@/lib/index-data";
-import {
-  calcPct,
-  computeChangePct,
-  findFirstOnOrAfter,
-  round,
-  shiftDateByMonths,
-  shiftDateByYears,
-  startOfMonth,
-  startOfWeek,
-} from "@/lib/price-analytics";
+import { calcPct, round } from "@/lib/price-analytics";
 
 /**
  * BTC 观察页服务层。
@@ -76,17 +69,9 @@ function computeMaxDrawdownPct(rows: DailyPriceRecord[]) {
 }
 
 function buildBtcCard(rows: DailyPriceRecord[]): BtcCard | null {
-  const latest = rows.at(-1);
-  const previous = rows.at(-2);
+  const metrics = computePeriodChangeMetrics(rows);
 
-  if (!latest || !previous) {
-    return null;
-  }
-
-  const weekStartRow = findFirstOnOrAfter(rows, startOfWeek(latest.date));
-  const monthStartRow = findFirstOnOrAfter(rows, startOfMonth(latest.date));
-
-  if (!weekStartRow || !monthStartRow) {
+  if (!metrics) {
     return null;
   }
 
@@ -94,17 +79,17 @@ function buildBtcCard(rows: DailyPriceRecord[]): BtcCard | null {
     symbol: BTC_SYMBOL,
     title: "BTC 观察",
     description: "作为补充观察对象，用于快速判断 BTC/USD 的位置与区间变化。",
-    latestDate: latest.date,
-    currentPrice: latest.close,
-    dailyChangePct: round(calcPct(latest.close, previous.close)),
-    weeklyChangePct: round(calcPct(latest.close, weekStartRow.close)),
-    monthlyChangePct: round(calcPct(latest.close, monthStartRow.close)),
-    sixMonthChangePct: computeChangePct(latest.close, rows, shiftDateByMonths(latest.date, 6)),
-    oneYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 1)),
-    twoYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 2)),
-    threeYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 3)),
-    fiveYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 5)),
-    tenYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 10)),
+    latestDate: metrics.latest.date,
+    currentPrice: metrics.latest.close,
+    dailyChangePct: metrics.dailyChangePct,
+    weeklyChangePct: metrics.weeklyChangePct,
+    monthlyChangePct: metrics.monthlyChangePct,
+    sixMonthChangePct: metrics.sixMonthChangePct,
+    oneYearChangePct: metrics.oneYearChangePct,
+    twoYearChangePct: metrics.twoYearChangePct,
+    threeYearChangePct: metrics.threeYearChangePct,
+    fiveYearChangePct: metrics.fiveYearChangePct,
+    tenYearChangePct: metrics.tenYearChangePct,
     maxDrawdownPct: computeMaxDrawdownPct(rows),
   };
 }
@@ -125,7 +110,7 @@ export async function getBtcCard() {
 }
 
 export async function getBtcChartData(range: ChartRange = BTC_DEFAULT_CHART_RANGE) {
-  return getMarketChartData(BTC_SYMBOL, range);
+  return getDailyPriceChartData(BTC_SYMBOL, range);
 }
 
 export async function getDefaultBtcChart() {

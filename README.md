@@ -27,10 +27,11 @@ Index Journal 是一个聚焦美股核心指数的盘后市场观察面板。
 5. 提供 `/api/market` 和 `/api/market/chart`
 6. 提供“昨夜收盘快照 + 官方EOD”双轨展示口径（仅首页头部价格）
 7. 提供汇率观察页与 BTC 观察页，统一复用本地日线计算与走势图组件
+8. 在纽约常规交易时段，首页头部可显示 ETF 轻量实时价；区间指标和图表仍只使用本地日线
 
 当前明确不做：
 
-- 盘中实时数据
+- 交易终端式盘中实时行情
 - 专业交易终端式的复杂交互
 - 后台管理系统
 - 为了“看起来很强”而堆叠的大量入口和按钮
@@ -68,13 +69,15 @@ Index Journal 把这件事收敛成一个页面：
 
 当前数据源：
 
-- Twelve Data `time_series`
-- Twelve Data `quote`（仅用于首页早晨快照）
+- Twelve Data `time_series`：正式日线，负责长期历史、图表和指标
+- Twelve Data `quote`：早晨快照、手动快照和首页纽约时段轻量实时价
+- FMP / Stooq：仅用于首页头部“真实指数点位”展示；不进入长期指标计算
 
 口径术语：
 
 - `昨夜收盘快照`：北京早晨优先展示的快速口径，用于先看昨晚收盘方向
 - `官方EOD`：官方日线最终口径，用于正式统计、长期指标与图表
+- `真实指数点位`：首页头部展示层信息，优先 FMP，失败后回退 Stooq；指标口径仍是 `SPY` / `QQQ` 日线
 
 为什么先用 ETF 替代指数本体：
 
@@ -96,6 +99,7 @@ npm install
 ```bash
 DATABASE_URL="file:./dev.db"
 TWELVE_DATA_API_KEY="你的 Twelve Data API Key"
+FMP_API_KEY="可选，用于首页真实指数点位优先源"
 ```
 
 3. 初始化数据库
@@ -326,6 +330,7 @@ HOST_PORT=8080 ./deploy.sh
 - `GET /api/forex/chart?symbol=USD/CNY&range=1Y`
 - `GET /api/btc`
 - `GET /api/btc/chart?symbol=BTC/USD&range=1Y`
+- `GET /api/live-price?symbol=SPY`
 - `GET /api/cn-funds/quarterly`
 - `GET /api/otc-funds/quarterly`
 - `POST /api/cn-funds/quarterly`
@@ -342,9 +347,10 @@ HOST_PORT=8080 ./deploy.sh
 
 手动刷新策略：
 
-- 仅用户手动触发，不做自动高频轮询
-- 按页面数据组做 5 分钟节流（`market` / `forex` / `btc`）
-- BTC 支持 7x24；指数与汇率仅纽约常规交易时段允许刷新
+- 首页指数手动刷新仅用户点击触发，且仅纽约常规交易时段允许
+- 汇率与 BTC 允许 7x24 刷新；页面访问时会后台检查最近快照，过期后触发一次非阻塞刷新
+- 手动快照按页面数据组节流：`market` 为 1 分钟，`forex` / `btc` 为 5 分钟
+- 所有快照只影响头部当前价格参考，区间统计继续使用本地日线历史
 
 图表范围固定为：
 

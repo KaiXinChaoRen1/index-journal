@@ -60,6 +60,8 @@ app/                     # Next.js App Router
 
 lib/                     # Service layer - core business logic
   index-data.ts          # Home page data service (most important)
+  daily-chart-data.ts    # Shared chart data service for local daily prices
+  daily-price-metrics.ts # Shared period return calculations
   forex-data.ts          # Forex data service
   btc-data.ts            # BTC data service
   price-analytics.ts     # Metric calculations (returns, drawdowns)
@@ -95,11 +97,15 @@ See `lib/dual-track-sync.ts` for the compensation logic that handles timing gaps
 All metrics (daily/weekly/monthly returns, CAGR, drawdowns) are computed locally from SQLite data in `lib/price-analytics.ts`. This ensures stable methodology even if data sources change.
 
 ### Manual Refresh with Throttling
-User-initiated refreshes are grouped by page (`market`/`forex`/`btc`) and throttled to 5-minute intervals. Failed requests don't break the UI - they show error states while keeping historical data visible. See `lib/manual-snapshot.ts`.
+Refreshes are grouped by page (`market`/`forex`/`btc`) and throttled per group. `market` uses a 1-minute cooldown and is only user-initiated; `forex` and `btc` use 5-minute cooldowns and may run a non-blocking background refresh when the page is visited and the cached snapshot is stale. Failed requests don't break the UI - they show error states while keeping historical data visible. See `lib/manual-snapshot.ts`.
 
 ### Page Group Refresh Rules
 - **BTC**: 7x24 refresh allowed
-- **Market/Forex**: Only during NY regular trading hours (9:30-16:00 ET, weekdays)
+- **Forex**: 7x24 refresh allowed
+- **Market**: Only during NY regular trading hours (9:30-16:00 ET, weekdays)
+
+### Display-Only Index Points
+The home page header can show real index points from FMP with Stooq as fallback. This is display-only. Metrics and charts still use local `SPY` / `QQQ` daily prices from Twelve Data.
 
 ## Development Guidelines
 
@@ -162,7 +168,7 @@ npm run dev
 - **No data on home page**: Check if `npm run sync:data` has been run
 - **Sync failures**: Verify `TWELVE_DATA_API_KEY` is set and valid
 - **10Y metrics show "insufficient data"**: Check if historical data covers the period
-- **Manual refresh unavailable**: Check trading hours (BTC 7x24, others NY hours only)
+- **Manual refresh unavailable**: Check trading hours (BTC/forex 7x24, market NY hours only)
 - **Fund reports not parsing**: Ensure `pdf-parse@1.1.1` is installed (not newer versions)
 
 ## Important Files for Understanding

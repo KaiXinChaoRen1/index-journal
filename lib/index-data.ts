@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { getDailyPriceChartData } from "@/lib/daily-chart-data";
+import { computePeriodChangeMetrics } from "@/lib/daily-price-metrics";
 import { getDisplayIndexPoints } from "@/lib/display-index-points";
 import {
   getTodayMorningSnapshots,
@@ -13,23 +15,15 @@ import {
   formatPercent,
   formatPercentOrFallback,
   getDefaultChartRange,
-  isChartRange,
+  parseChartRange as parseSharedChartRange,
   type ChartRange,
-  type MarketChartData,
-  type MarketChartPoint,
 } from "@/lib/market-shared";
 import {
   calcCagrPct,
   calcPct,
-  computeChangePct,
-  findFirstOnOrAfter,
   findLatestOnOrBefore,
   round,
-  shiftDateByMonths,
   shiftDateByYears,
-  startOfMonth,
-  startOfWeek,
-  startOfYear,
 } from "@/lib/price-analytics";
 
 /**
@@ -62,7 +56,6 @@ export const MARKET_DEFINITIONS = [
 
 export type MarketKey = (typeof MARKET_DEFINITIONS)[number]["marketKey"];
 type MarketDefinition = (typeof MARKET_DEFINITIONS)[number];
-const MAX_CHART_POINTS = 480;
 
 type DailyPriceRecord = {
   symbol: string;
@@ -132,53 +125,15 @@ function computeAth(rows: DailyPriceRecord[]) {
   return rows.reduce((best, current) => (current.close > best.close ? current : best));
 }
 
-function getChartStartDate(latestDate: Date, range: ChartRange) {
-  switch (range) {
-    case "1M":
-      return shiftDateByMonths(latestDate, 1);
-    case "6M":
-      return shiftDateByMonths(latestDate, 6);
-    case "1Y":
-      return shiftDateByYears(latestDate, 1);
-    case "5Y":
-      return shiftDateByYears(latestDate, 5);
-    case "MAX":
-      return null;
-  }
-}
-
-function downsampleChartRows(rows: DailyPriceRecord[]) {
-  if (rows.length <= MAX_CHART_POINTS) {
-    return { rows, isSampled: false };
-  }
-
-  const step = Math.ceil(rows.length / MAX_CHART_POINTS);
-  const sampled = rows.filter((_, index) => index % step === 0);
-  const latest = rows.at(-1);
-
-  if (latest && sampled.at(-1)?.date.getTime() !== latest.date.getTime()) {
-    sampled.push(latest);
-  }
-
-  return { rows: sampled, isSampled: true };
-}
-
 function buildMarketCard(market: MarketDefinition, rows: DailyPriceRecord[]): MarketCard | null {
-  const latest = rows.at(-1);
-  const previous = rows.at(-2);
+  const metrics = computePeriodChangeMetrics(rows);
 
-  if (!latest || !previous) {
+  if (!metrics) {
     return null;
   }
 
-  const weekStartRow = findFirstOnOrAfter(rows, startOfWeek(latest.date));
-  const monthStartRow = findFirstOnOrAfter(rows, startOfMonth(latest.date));
-  const yearStartRow = findFirstOnOrAfter(rows, startOfYear(latest.date));
+  const { latest } = metrics;
   const athRow = computeAth(rows);
-
-  if (!weekStartRow || !monthStartRow) {
-    return null;
-  }
 
   return {
     marketKey: market.marketKey,
@@ -187,15 +142,15 @@ function buildMarketCard(market: MarketDefinition, rows: DailyPriceRecord[]): Ma
     description: market.description,
     latestDate: latest.date,
     currentPrice: latest.close,
-    dailyChangePct: round(calcPct(latest.close, previous.close)),
-    weeklyChangePct: round(calcPct(latest.close, weekStartRow.close)),
-    monthlyChangePct: round(calcPct(latest.close, monthStartRow.close)),
-    sixMonthChangePct: computeChangePct(latest.close, rows, shiftDateByMonths(latest.date, 6)),
-    oneYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 1)),
-    twoYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 2)),
-    fiveYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 5)),
-    tenYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 10)),
-    ytdChangePct: yearStartRow ? round(calcPct(latest.close, yearStartRow.close)) : null,
+    dailyChangePct: metrics.dailyChangePct,
+    weeklyChangePct: metrics.weeklyChangePct,
+    monthlyChangePct: metrics.monthlyChangePct,
+    sixMonthChangePct: metrics.sixMonthChangePct,
+    oneYearChangePct: metrics.oneYearChangePct,
+    twoYearChangePct: metrics.twoYearChangePct,
+    fiveYearChangePct: metrics.fiveYearChangePct,
+    tenYearChangePct: metrics.tenYearChangePct,
+    ytdChangePct: metrics.ytdChangePct,
     fiveYearAnnualizedReturnPct: computeAnnualizedReturnPct(
       latest.close,
       rows,
@@ -271,44 +226,8 @@ export async function getMarketCards() {
 export async function getMarketChartData(
   symbol: string,
   range: ChartRange = getDefaultChartRange(),
-): Promise<MarketChartData> {
-  const rows = await prisma.dailyPrice.findMany({
-    where: { symbol },
-    orderBy: { date: "asc" },
-  });
-
-  const latest = rows.at(-1) ?? null;
-
-  if (!latest) {
-    return {
-      symbol,
-      range,
-      latestDate: null,
-      isSampled: false,
-      points: [],
-    };
-  }
-
-  const startDate = getChartStartDate(latest.date, range);
-  const filteredRows =
-    startDate === null
-      ? rows
-      : rows.filter((row) => row.date.getTime() >= startDate.getTime());
-  const chartRows =
-    range === "MAX"
-      ? downsampleChartRows(filteredRows)
-      : { rows: filteredRows, isSampled: false };
-
-  return {
-    symbol,
-    range,
-    latestDate: latest.date.toISOString().slice(0, 10),
-    isSampled: chartRows.isSampled,
-    points: chartRows.rows.map((row) => ({
-      date: row.date.toISOString().slice(0, 10),
-      close: round(row.close),
-    })),
-  };
+) {
+  return getDailyPriceChartData(symbol, range);
 }
 
 export async function getDefaultMarketCharts() {
@@ -363,11 +282,7 @@ export async function getMarketApiPayload() {
 }
 
 export function parseChartRange(value: string | null | undefined) {
-  if (value && isChartRange(value)) {
-    return value;
-  }
-
-  return getDefaultChartRange();
+  return parseSharedChartRange(value);
 }
 
 export {

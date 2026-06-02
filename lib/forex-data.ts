@@ -1,22 +1,14 @@
 import { prisma } from "@/lib/prisma";
+import { getDailyPriceChartData } from "@/lib/daily-chart-data";
+import { computePeriodChangeMetrics } from "@/lib/daily-price-metrics";
 import {
   formatDate,
   formatPercentOrFallback,
   getDefaultChartRange,
+  parseChartRange,
   type ChartRange,
   type MarketChartData,
 } from "@/lib/market-shared";
-import { getMarketChartData, parseChartRange } from "@/lib/index-data";
-import {
-  calcPct,
-  computeChangePct,
-  findFirstOnOrAfter,
-  round,
-  shiftDateByMonths,
-  shiftDateByYears,
-  startOfMonth,
-  startOfWeek,
-} from "@/lib/price-analytics";
 
 /**
  * 汇率观察页服务层。
@@ -74,18 +66,9 @@ export type ForexCard = {
 };
 
 function buildForexCard(forex: ForexDefinition, rows: DailyPriceRecord[]): ForexCard | null {
-  const latest = rows.at(-1);
-  const previous = rows.at(-2);
+  const metrics = computePeriodChangeMetrics(rows);
 
-  if (!latest || !previous) {
-    return null;
-  }
-
-  // 关键口径与指数页保持一致：周/月从周期首个可用交易日取基准。
-  const weekStartRow = findFirstOnOrAfter(rows, startOfWeek(latest.date));
-  const monthStartRow = findFirstOnOrAfter(rows, startOfMonth(latest.date));
-
-  if (!weekStartRow || !monthStartRow) {
+  if (!metrics) {
     return null;
   }
 
@@ -94,13 +77,13 @@ function buildForexCard(forex: ForexDefinition, rows: DailyPriceRecord[]): Forex
     title: forex.title,
     description: forex.description,
     priority: forex.priority,
-    latestDate: latest.date,
-    currentPrice: latest.close,
-    dailyChangePct: round(calcPct(latest.close, previous.close)),
-    weeklyChangePct: round(calcPct(latest.close, weekStartRow.close)),
-    monthlyChangePct: round(calcPct(latest.close, monthStartRow.close)),
-    sixMonthChangePct: computeChangePct(latest.close, rows, shiftDateByMonths(latest.date, 6)),
-    oneYearChangePct: computeChangePct(latest.close, rows, shiftDateByYears(latest.date, 1)),
+    latestDate: metrics.latest.date,
+    currentPrice: metrics.latest.close,
+    dailyChangePct: metrics.dailyChangePct,
+    weeklyChangePct: metrics.weeklyChangePct,
+    monthlyChangePct: metrics.monthlyChangePct,
+    sixMonthChangePct: metrics.sixMonthChangePct,
+    oneYearChangePct: metrics.oneYearChangePct,
   };
 }
 
@@ -126,7 +109,7 @@ export async function getForexCards() {
 }
 
 export async function getForexChartData(symbol: string, range: ChartRange = getDefaultChartRange()) {
-  return getMarketChartData(symbol, range);
+  return getDailyPriceChartData(symbol, range);
 }
 
 export async function getDefaultForexCharts() {

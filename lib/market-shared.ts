@@ -25,6 +25,14 @@ export function isChartRange(value: string): value is ChartRange {
   return CHART_RANGES.includes(value as ChartRange);
 }
 
+export function parseChartRange(value: string | null | undefined) {
+  if (value && isChartRange(value)) {
+    return value;
+  }
+
+  return getDefaultChartRange();
+}
+
 export function formatPercent(value: number) {
   const formatter = new Intl.NumberFormat("zh-CN", {
     minimumFractionDigits: 2,
