@@ -174,8 +174,11 @@ async function resolveDisplayIndexPoint(definition: DisplayIndexDefinition): Pro
     if (fmpPoint) {
       return fmpPoint;
     }
-  } catch {
-    // FMP 是优先源，但任何失败都继续尝试备用源，避免首页头部因单一服务失败而空白。
+  } catch (error) {
+    // FMP 是优先源，任何失败都继续尝试备用源，避免首页头部因单一服务失败而空白。
+    // 但要把失败原因记到服务端日志：否则 API key 失效、额度耗尽、源站格式变化
+    // 都只会表现成 UI 上的"点位暂不可用"，无法区分和定位。
+    console.error(`Display index FMP source failed for ${definition.marketKey} (${definition.fmpSymbol}):`, error);
   }
 
   try {
@@ -184,8 +187,9 @@ async function resolveDisplayIndexPoint(definition: DisplayIndexDefinition): Pro
     if (stooqPoint) {
       return stooqPoint;
     }
-  } catch {
-    // 备用源也可能失败，此时交给最终不可用态统一提示。
+  } catch (error) {
+    // 备用源也可能失败，此时交给最终不可用态统一提示；同样保留服务端日志便于排障。
+    console.error(`Display index Stooq source failed for ${definition.marketKey} (${definition.stooqSymbol}):`, error);
   }
 
   return {

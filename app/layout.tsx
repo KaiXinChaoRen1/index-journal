@@ -12,6 +12,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // suppressHydrationWarning 仅用于压制浏览器扩展/代理向 <html>/<body> 根节点注入属性
+  // （如 data-*、class）导致的 hydration 属性告警——这类差异来自客户端环境，不是我们的渲染问题。
+  // 注意边界：它只压制这两个根节点自身的属性差异，不会向下传播；如果未来子树出现真实的
+  // 服务端/客户端不一致，仍会正常告警，不要把这里当成常规写法到处套用。
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body suppressHydrationWarning>{children}</body>

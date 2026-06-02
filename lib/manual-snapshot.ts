@@ -70,7 +70,7 @@ export type SnapshotRefreshAvailability = {
   reason: string | null;
 };
 
-function parsePayload(value: string | null): SnapshotPayload {
+function parsePayload(value: string | null, groupKey: SnapshotGroupKey): SnapshotPayload {
   if (!value) {
     return {};
   }
@@ -78,7 +78,11 @@ function parsePayload(value: string | null): SnapshotPayload {
   try {
     const parsed = JSON.parse(value) as SnapshotPayload;
     return parsed ?? {};
-  } catch {
+  } catch (error) {
+    // 缓存损坏时仍返回空对象，让页面降级显示（表现为"暂无快照"）。
+    // 但必须把损坏暴露到服务端日志，否则"页面没有快照"会掩盖"本地缓存坏了"这个真实问题，
+    // 排障时无从下手。带上 groupKey 以便定位是哪一组的缓存。
+    console.error(`Manual snapshot payload corrupted for group "${groupKey}":`, error);
     return {};
   }
 }
@@ -116,12 +120,15 @@ function toFriendlyErrorMessage(error: unknown) {
   return "刷新失败，当前仍显示最近一次快照或日线数据。";
 }
 
-function toSnapshotState(record: {
-  payloadJson: string | null;
-  lastSuccessAt: Date | null;
-  lastAttemptAt: Date | null;
-  lastErrorMessage: string | null;
-} | null): SnapshotStateRecord {
+function toSnapshotState(
+  record: {
+    payloadJson: string | null;
+    lastSuccessAt: Date | null;
+    lastAttemptAt: Date | null;
+    lastErrorMessage: string | null;
+  } | null,
+  groupKey: SnapshotGroupKey,
+): SnapshotStateRecord {
   if (!record) {
     return {
       payload: {},
@@ -132,7 +139,7 @@ function toSnapshotState(record: {
   }
 
   return {
-    payload: parsePayload(record.payloadJson),
+    payload: parsePayload(record.payloadJson, groupKey),
     lastSuccessAt: record.lastSuccessAt,
     lastAttemptAt: record.lastAttemptAt,
     lastErrorMessage: record.lastErrorMessage,
@@ -359,7 +366,7 @@ export async function getSnapshotGroupState(groupKey: SnapshotGroupKey) {
     },
   });
 
-  return toSnapshotState(record);
+  return toSnapshotState(record, groupKey);
 }
 
 export async function refreshSnapshotGroup(groupKey: SnapshotGroupKey): Promise<SnapshotRefreshResult> {
