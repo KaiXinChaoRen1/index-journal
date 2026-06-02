@@ -1,9 +1,17 @@
 import mammoth from "mammoth";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { prisma } from "@/lib/prisma";
 
 const CSRC_VALIDATE_URL = "http://eid.csrc.gov.cn/fund/disclose/validate_fund.do";
 const CSRC_FUND_DETAIL_URL = "http://eid.csrc.gov.cn/fund/disclose/fund_detail.do";
 const CSRC_ORIGIN = "http://eid.csrc.gov.cn";
+
+// 证监会披露平台偶发慢响应/无响应，给三步外部请求分别设超时上限，避免整条抓取链路
+// （最终是用户新增基金的 POST 请求）一直挂到运行时超时。
+// 下载报告正文可能是几 MB 的 PDF/Word，给更宽松的上限。
+const VALIDATE_TIMEOUT_MS = 8_000;
+const DETAIL_TIMEOUT_MS = 12_000;
+const REPORT_DOWNLOAD_TIMEOUT_MS = 30_000;
 const REQUEST_HEADERS = {
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "user-agent":
@@ -338,10 +346,14 @@ function detectReportFormat(detailUrl: string, contentType: string | null) {
 
 async function parseReportText(detailUrl: string) {
   try {
-    const response = await fetch(detailUrl, {
-      headers: REQUEST_HEADERS,
-      cache: "no-store",
-    });
+    const response = await fetchWithTimeout(
+      detailUrl,
+      {
+        headers: REQUEST_HEADERS,
+        cache: "no-store",
+      },
+      { timeoutMs: REPORT_DOWNLOAD_TIMEOUT_MS, label: "报告下载" },
+    );
 
     if (!response.ok) {
       return {
@@ -650,18 +662,22 @@ export async function getFundIdByCode(fundCode: string): Promise<FundIdLookupRes
     const body = new URLSearchParams();
     body.set("cFundCode", fundCode);
 
-    const response = await fetch(CSRC_VALIDATE_URL, {
-      method: "POST",
-      headers: {
-        ...REQUEST_HEADERS,
-        accept: "application/json, text/javascript, */*; q=0.01",
-        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "x-requested-with": "XMLHttpRequest",
-        referer: `${CSRC_ORIGIN}/fund/index.html`,
+    const response = await fetchWithTimeout(
+      CSRC_VALIDATE_URL,
+      {
+        method: "POST",
+        headers: {
+          ...REQUEST_HEADERS,
+          accept: "application/json, text/javascript, */*; q=0.01",
+          "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "x-requested-with": "XMLHttpRequest",
+          referer: `${CSRC_ORIGIN}/fund/index.html`,
+        },
+        body: body.toString(),
+        cache: "no-store",
       },
-      body: body.toString(),
-      cache: "no-store",
-    });
+      { timeoutMs: VALIDATE_TIMEOUT_MS, label: "基金代码查询" },
+    );
 
     if (!response.ok) {
       return {
@@ -686,10 +702,11 @@ export async function getFundIdByCode(fundCode: string): Promise<FundIdLookupRes
       ok: true,
       fundId: String(payload.fundId),
     };
-  } catch {
+  } catch (error) {
+    // 把真实原因（含超时）带出去，而不是统一压成"请稍后重试"，方便定位是网络、超时还是别的问题。
     return {
       ok: false,
-      message: "查询 fundId 失败，请稍后重试。",
+      message: error instanceof Error ? error.message : "查询 fundId 失败，请稍后重试。",
     };
   }
 }
@@ -699,10 +716,14 @@ async function fetchFundDetailById(fundId: string) {
   url.searchParams.set("fundId", fundId);
 
   try {
-    const response = await fetch(url.toString(), {
-      headers: REQUEST_HEADERS,
-      cache: "no-store",
-    });
+    const response = await fetchWithTimeout(
+      url.toString(),
+      {
+        headers: REQUEST_HEADERS,
+        cache: "no-store",
+      },
+      { timeoutMs: DETAIL_TIMEOUT_MS, label: "基金详情页" },
+    );
 
     const html = await response.text();
 

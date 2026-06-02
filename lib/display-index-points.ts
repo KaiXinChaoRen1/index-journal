@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { formatDate } from "@/lib/market-shared";
 
 type MarketKey = "SP500" | "NASDAQ100";
@@ -26,6 +27,8 @@ type CacheEntry = {
 };
 
 const DISPLAY_INDEX_CACHE_MS = 60_000;
+// 这两个请求在首页 SSR 主路径上，必须给紧一点的超时，避免单个数据源无响应拖住整页渲染。
+const DISPLAY_INDEX_FETCH_TIMEOUT_MS = 8_000;
 const FMP_QUOTE_SHORT_URL = "https://financialmodelingprep.com/stable/quote-short";
 const STOOQ_DAILY_CSV_URL = "https://stooq.com/q/d/l/";
 
@@ -72,10 +75,14 @@ async function fetchFmpPoint(definition: DisplayIndexDefinition): Promise<Displa
   url.searchParams.set("symbol", definition.fmpSymbol);
   url.searchParams.set("apikey", apiKey);
 
-  const response = await fetch(url.toString(), {
-    headers: { accept: "application/json" },
-    cache: "no-store",
-  });
+  const response = await fetchWithTimeout(
+    url.toString(),
+    {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    },
+    { timeoutMs: DISPLAY_INDEX_FETCH_TIMEOUT_MS, label: "FMP 指数点位" },
+  );
 
   if (!response.ok) {
     throw new Error(`FMP request failed with status ${response.status}.`);
@@ -112,9 +119,13 @@ async function fetchStooqPoint(definition: DisplayIndexDefinition): Promise<Disp
   url.searchParams.set("s", definition.stooqSymbol);
   url.searchParams.set("i", "d");
 
-  const response = await fetch(url.toString(), {
-    cache: "no-store",
-  });
+  const response = await fetchWithTimeout(
+    url.toString(),
+    {
+      cache: "no-store",
+    },
+    { timeoutMs: DISPLAY_INDEX_FETCH_TIMEOUT_MS, label: "Stooq 指数点位" },
+  );
 
   if (!response.ok) {
     throw new Error(`Stooq request failed with status ${response.status}.`);
