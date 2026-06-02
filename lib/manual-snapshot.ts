@@ -205,8 +205,10 @@ export function shouldAutoRefresh(
 /**
  * 后台触发刷新（不等待结果）。
  *
- * 用于首页等场景：快速检查是否需要刷新，如果需要则在后台触发，
- * 不阻塞页面渲染。用户后续进入 BTC/Forex 页面时数据已更新。
+ * 由对应页面（BTC/Forex）在自己加载时调用：快速检查本组是否需要刷新，
+ * 需要则在后台触发，不阻塞当前渲染，让下一次访问看到更新后的数据。
+ *
+ * 注意：这里是有意的"触发即返回"，本次渲染不会等到刷新结果。
  */
 export async function triggerBackgroundRefresh(groupKey: SnapshotGroupKey): Promise<void> {
   const state = await getSnapshotGroupState(groupKey);
@@ -221,8 +223,9 @@ export async function triggerBackgroundRefresh(groupKey: SnapshotGroupKey): Prom
   Promise.resolve().then(async () => {
     try {
       await refreshSnapshotGroup(groupKey);
-    } catch {
-      // 后台刷新失败静默处理
+    } catch (error) {
+      // 后台刷新失败不影响页面渲染，但要记录原因：否则数据迟迟不更新时无从排查。
+      console.error(`Background snapshot refresh for group "${groupKey}" failed:`, error);
     }
   });
 }

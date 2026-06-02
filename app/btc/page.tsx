@@ -6,6 +6,7 @@ import { formatIndexValue } from "@/lib/market-shared";
 import {
   getSnapshotGroupState,
   getSnapshotRefreshAvailability,
+  triggerBackgroundRefresh,
 } from "@/lib/manual-snapshot";
 import {
   formatDate,
@@ -17,8 +18,12 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function BtcPage() {
-  // BTC 页面只读取数据，刷新逻辑由首页后台触发或用户手动触发
-  // 避免用户进入页面时因同步刷新而等待
+  // 进入页面时后台触发本组刷新（不等待结果），让下次访问看到更新后的数据；
+  // 当前这次渲染仍读取已有快照，避免同步刷新拖慢首屏。
+  // 刷新本身受冷却与时段约束，是否真正发起由 triggerBackgroundRefresh 内部判断。
+  void triggerBackgroundRefresh("btc");
+
+  // BTC 页面渲染只读取已有数据。
   const [card, defaultChart, snapshotState, refreshAvailability] = await Promise.all([
     getBtcCard(),
     getDefaultBtcChart(),

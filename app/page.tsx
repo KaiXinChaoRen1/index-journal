@@ -16,7 +16,6 @@ import {
 import {
   getSnapshotGroupState,
   getSnapshotRefreshAvailability,
-  triggerBackgroundRefresh,
 } from "@/lib/manual-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -43,11 +42,6 @@ export default async function HomePage() {
   // 页面在真正取数前先做一次"启动补偿"，目的是避免当天该有的快照 / EOD
   // 还没跑到，但用户已经先打开了站点。
   await ensureStartupCompensation();
-
-  // 后台检查并触发 BTC/Forex 刷新（不等待结果）
-  // 这样用户后续进入这些页面时数据可能已经更新
-  void triggerBackgroundRefresh("btc");
-  void triggerBackgroundRefresh("forex");
 
   // 首页真正依赖的只有三份数据：
   // 1. 卡片指标
