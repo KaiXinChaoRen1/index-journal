@@ -145,7 +145,7 @@ npm run db:push
 
 ## 9. Docker 部署约定
 
-当前 Docker 方案服务的是“单机云服务器可直接运行”的目标，不追求复杂编排。
+当前 Docker 方案服务的是“单机云服务器可直接运行”的低频目标，不追求复杂编排，也不参与日常本地开发主链路。
 
 最小要求：
 
@@ -156,20 +156,15 @@ npm run db:push
 推荐命令：
 
 ```bash
-docker build -t index-journal:latest .
-
-docker run -d \
-  --name index-journal \
-  -p 3000:3000 \
-  -e TWELVE_DATA_API_KEY="你的 API Key" \
-  -e DATABASE_URL="file:/data/dev.db" \
-  -v "$(pwd)/data:/data" \
-  --restart unless-stopped \
-  index-journal:latest
+export TWELVE_DATA_API_KEY="你的 API Key"
+./deploy.sh
 ```
 
 补充说明：
 
+- 默认宿主端口是 `3100`，容器内端口仍是 `3000`，避免和本地开发默认端口混在一起
+- 如需改宿主端口，执行前设置 `HOST_PORT=目标端口`
 - 容器入口会先执行 `prisma db push`，再启动 `next start`
 - 首次部署后，如果需要补历史数据，手动执行 `docker exec index-journal npm run sync:data`
+- `deploy.sh` 会在替换容器失败时尽量恢复旧容器
 - 不建议把服务器 IP、域名或 API Key 写死在部署脚本里

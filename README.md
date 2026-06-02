@@ -131,25 +131,18 @@ npm run dev
 
 ## Docker 部署
 
-如果你要把项目直接跑在一台云服务器上，当前支持最小 Docker 部署。
+Docker 只是可选的单机部署路径，日常本地开发仍然使用 `npm run dev`。为了和本机开发端口隔离，部署脚本默认把宿主机 `3100` 映射到容器内 `3000`。
 
-1. 构建镜像
+1. 设置 API Key
 
 ```bash
-docker build -t index-journal:latest .
+export TWELVE_DATA_API_KEY="你的 Twelve Data API Key"
 ```
 
-2. 启动容器
+2. 启动或更新容器
 
 ```bash
-docker run -d \
-  --name index-journal \
-  -p 3000:3000 \
-  -e TWELVE_DATA_API_KEY="你的 Twelve Data API Key" \
-  -e DATABASE_URL="file:/data/dev.db" \
-  -v "$(pwd)/data:/data" \
-  --restart unless-stopped \
-  index-journal:latest
+./deploy.sh
 ```
 
 3. 首次同步历史数据
@@ -160,10 +153,12 @@ docker exec index-journal npm run sync:data
 
 说明：
 
+- 默认访问地址是 `http://服务器 IP:3100`
+- 如需改宿主端口，执行前设置 `HOST_PORT=目标端口`
 - 容器启动时会自动执行 `prisma db push`，保证 SQLite schema 已初始化
 - SQLite 数据库放在容器内 `/data/dev.db`，因此要挂载宿主机目录做持久化
 - 如果不提供 `TWELVE_DATA_API_KEY`，页面仍可启动，但同步脚本和手动刷新不会成功
-- 也可以直接使用仓库内的 `./deploy.sh`，它会完成构建和容器启动
+- `deploy.sh` 会先构建新镜像，再替换旧容器；如果新容器启动失败，会尽量恢复旧容器
 
 ## Linux 服务器从克隆到运行
 
@@ -174,7 +169,7 @@ docker exec index-journal npm run sync:data
 1. 一台能联网的 Linux 服务器
 2. 服务器已安装 `git` 和 `docker`
 3. 你自己的 `TWELVE_DATA_API_KEY`
-4. 云厂商安全组或服务器防火墙已放行你的服务端口，例如 `3000`
+4. 云厂商安全组或服务器防火墙已放行你的服务端口，默认是 `3100`
 
 如果你还没装 Docker，以 Ubuntu / Debian 为例：
 
@@ -212,41 +207,20 @@ export TWELVE_DATA_API_KEY="你的 Twelve Data API Key"
 
 如果你希望每次登录服务器都自动生效，可以把它写进 `~/.bashrc` 或 `~/.zshrc`。
 
-### 3. 构建镜像
+### 3. 启动容器
 
 ```bash
-docker build -t index-journal:latest .
+./deploy.sh
 ```
 
-### 4. 创建持久化目录
+脚本会自动完成：
 
-```bash
-mkdir -p ./data
-```
+1. 创建 `./data` 持久化目录
+2. 构建 `index-journal:latest` 镜像
+3. 启动容器，并将宿主机 `3100` 映射到容器内 `3000`
+4. 容器内先执行 `prisma db push`，再启动 `next start`
 
-这个目录会映射到容器里的 `/data`，用来保存 SQLite 数据库。
-
-### 5. 启动容器
-
-```bash
-docker run -d \
-  --name index-journal \
-  -p 3000:3000 \
-  -e TWELVE_DATA_API_KEY="${TWELVE_DATA_API_KEY}" \
-  -e DATABASE_URL="file:/data/dev.db" \
-  -v "$(pwd)/data:/data" \
-  --restart unless-stopped \
-  index-journal:latest
-```
-
-容器启动后会自动执行：
-
-1. `prisma db push`
-2. `next start`
-
-也就是说，数据库结构会先初始化，再启动 Web 服务。
-
-### 6. 首次同步历史数据
+### 4. 首次同步历史数据
 
 ```bash
 docker exec index-journal npm run sync:data
@@ -254,7 +228,7 @@ docker exec index-journal npm run sync:data
 
 如果你这一步暂时不执行，页面也能打开，只是会处于“无数据”状态。
 
-### 7. 验证服务是否正常
+### 5. 验证服务是否正常
 
 看容器状态：
 
@@ -271,22 +245,22 @@ docker logs -f index-journal
 本机验证：
 
 ```bash
-curl http://127.0.0.1:3000
+curl http://127.0.0.1:3100
 ```
 
 浏览器访问：
 
 ```text
-http://你的服务器公网 IP:3000
+http://你的服务器公网 IP:3100
 ```
 
 如果外网打不开，优先检查：
 
-1. 云服务器安全组是否放行 `3000`
-2. 服务器本机防火墙是否放行 `3000`
+1. 云服务器安全组是否放行 `3100`
+2. 服务器本机防火墙是否放行 `3100`
 3. 容器是否真的启动成功
 
-### 8. 后续常用操作
+### 6. 后续常用操作
 
 停止容器：
 
@@ -318,35 +292,21 @@ docker logs --tail 200 index-journal
 docker exec -it index-journal sh
 ```
 
-### 9. 更新到最新代码
+### 7. 更新到最新代码
 
 ```bash
 cd index-journal
 git pull
-docker build -t index-journal:latest .
-docker rm -f index-journal
-docker run -d \
-  --name index-journal \
-  -p 3000:3000 \
-  -e TWELVE_DATA_API_KEY="${TWELVE_DATA_API_KEY}" \
-  -e DATABASE_URL="file:/data/dev.db" \
-  -v "$(pwd)/data:/data" \
-  --restart unless-stopped \
-  index-journal:latest
+./deploy.sh
 ```
 
 因为数据库挂载在宿主机 `./data`，所以重建容器后数据仍然会保留。
 
-### 10. 用脚本部署
-
-如果你不想手敲 `docker build` 和 `docker run`，也可以直接用仓库里的脚本：
+如果你想临时使用别的宿主端口：
 
 ```bash
-export TWELVE_DATA_API_KEY="你的 Twelve Data API Key"
-./deploy.sh
+HOST_PORT=8080 ./deploy.sh
 ```
-
-脚本会完成镜像构建、替换旧容器和启动新容器。
 
 ## 当前页面与接口
 
